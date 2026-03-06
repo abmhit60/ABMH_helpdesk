@@ -275,7 +275,7 @@ function RaiseTicket({user,slaConfig,onDone}) {
     try {
       const hrs = getSlaHours(slaConfig, cat, priority);
       const ticket = {
-        id:genId(), emp_id:user.emp_id, user_name:user.name, dept,
+        id:genId(), emp_id:user.empid, user_name:user.name, dept,
         software, category:cat, module:mod, priority, description:desc,
         status:"Open", raised_at:new Date().toISOString(),
         sla_deadline:new Date(Date.now()+hrs*3600000).toISOString(), note:""
