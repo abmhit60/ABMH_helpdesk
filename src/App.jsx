@@ -154,7 +154,7 @@ function LoginScreen({onLogin}) {
     if(id.trim().length<3) { setEmpName(""); return; }
     setLookingUp(true);
     try {
-      const rows = await sbGet("employees", `employee_id=ilike.${encodeURIComponent(id.trim())}&is_active=eq.true`);
+      const rows = await sbGet("employees", `employee_id=eq.${encodeURIComponent(id.trim())}&is_active=eq.true`);
       if(rows.length>0) setEmpName(rows[0].name);
       else setEmpName("");
     } catch(e) { setEmpName(""); }
