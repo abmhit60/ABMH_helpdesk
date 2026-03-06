@@ -172,7 +172,7 @@ function LoginScreen({onLogin}) {
         if(mobile.length<10) { setErr("Please enter a valid 10-digit mobile number."); setLoading(false); return; }
         const rows = await sbGet(
   "employees",
-  `employee_id=ilike.${encodeURIComponent(id.trim())}&is_active=eq.true`
+  `employee_id=eq.${encodeURIComponent(empId.trim())}&is_active=eq.true`
 );
         if(rows.length>0) onLogin({
   role:"user",
