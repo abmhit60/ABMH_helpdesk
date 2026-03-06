@@ -471,7 +471,7 @@ function UserApp({user,slaConfig,onLogout}) {
         </div>
       </div>
 
-      <div style={{flex:1,overflowY:"auto",paddingTop:84}}>
+     <div style={{flex:1,overflowY:"auto",paddingTop:84,paddingBottom:90}}>
         {tab==="raise"?<RaiseTicket user={user} slaConfig={slaConfig} onDone={()=>setTab("mine")}/>:<MyTickets empId={user.emp_id}/>}
       </div>
 
