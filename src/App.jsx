@@ -177,6 +177,7 @@ function LoginScreen({onLogin}) {
         if(rows.length>0) onLogin({
   role:"user",
   empId: rows[0].employee_id,
+  emp_id: rows[0].employee_id,
   name: rows[0].name,
   department: rows[0].department,
   mobile
