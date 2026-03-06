@@ -174,7 +174,13 @@ function LoginScreen({onLogin}) {
   "employees",
   `employee_id=ilike.${encodeURIComponent(id.trim())}&is_active=eq.true`
 );
-        if(rows.length>0) onLogin({role:"user",...rows[0],mobile});
+        if(rows.length>0) onLogin({
+  role:"user",
+  empId: rows[0].employee_id,
+  name: rows[0].name,
+  department: rows[0].department,
+  mobile
+});
         else setErr("Employee not found.");
       }
     } catch(e) { setErr("Connection error. Please try again."); }
