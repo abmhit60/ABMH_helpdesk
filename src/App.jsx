@@ -5,7 +5,7 @@ import {
   Clock, CheckCircle, AlertTriangle, ChevronRight, FileText,
   Ticket, ArrowLeft, Bell, Loader, Settings,
   BarChart2, Download, Search, User, Edit3, Save, X,
-  Monitor, Wifi, Cpu, Calendar, ChevronLeft, ChevronDown, Bell
+  Monitor, Wifi, Cpu, Calendar, ChevronLeft, ChevronDown
 } from "lucide-react";
 
 // ─── Supabase ─────────────────────────────────────────────────────────────────
