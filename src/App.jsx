@@ -72,7 +72,6 @@ const LIGHT = "#fff5f5";
 const MAIN_CATEGORIES = {
   software: {
     label:"Software", icon:Monitor, color:"#0369a1", bg:"#eff6ff",
-    assignTo:"Hari B S",
     children:{
       HIS:["OPD Registration","IPD Admission","Billing & Invoicing","Pharmacy","Lab / Pathology","Radiology","EMR / Patient Records","Discharge Summary","Appointment Scheduling","Insurance / TPA","MIS Reports","User Management"],
       ERP:["Finance & Accounts","Inventory & Stores","Purchase & Procurement","Fixed Assets","Budget Management"],
@@ -81,7 +80,6 @@ const MAIN_CATEGORIES = {
   },
   hardware:{
     label:"Hardware & Operations", icon:Cpu, color:"#d97706", bg:"#fffbeb",
-    assignTo:"Sachin Mahadik",
     children:{
       "Desktop / Laptop":["System Not Starting","Slow Performance","Blue Screen / Crash","Keyboard / Mouse Issue","Monitor Issue","Upgradation Request","New Installation"],
       "Printer / Scanner":["Not Printing","Paper Jam","Poor Print Quality","Scanner Not Working","Driver Issue","Toner / Cartridge"],
@@ -93,7 +91,6 @@ const MAIN_CATEGORIES = {
   },
   network:{
     label:"Network", icon:Wifi, color:"#7c3aed", bg:"#f5f3ff",
-    assignTo:"Jagdish More",
     children:{
       "Internet / Connectivity":["No Internet","Slow Speed","Intermittent Drops","Website Blocked","VPN Issue"],
       "WiFi Issues":["No WiFi Signal","Weak Signal","Cannot Connect","IP Conflict","New WiFi Point Request"],
@@ -159,6 +156,14 @@ const TEAM_CONFIG = {
   },
 };
 // Flat list of all staff for login lookup
+function getL1ForTeam(team){
+  // For single L1, auto-assign; for multiple L1, leave unassigned so either can accept
+  const l1=TEAM_CONFIG[team]?.l1||[];
+  return l1.length===1?l1[0].name:"";
+}
+function getL2ForTeam(team){
+  return TEAM_CONFIG[team]?.l2?.[0]?.name||"";
+}
 function getAllStaff(){
   const list=[];
   Object.entries(TEAM_CONFIG).forEach(([team,cfg])=>{
@@ -477,12 +482,12 @@ function RaiseTicket({user,slaConfig,onDone}){
         id:genId(),emp_id:user.empId,user_name:user.name,mobile:user.mobile||"",dept,
         software:mainCat,category:subCat,module,issue_type:finalType,
         priority:defaultPriority,description:desc,status:"Open",
-        assigned_to:catDef.assignTo,raised_at:new Date().toISOString(),
+        assigned_to:getL1ForTeam(mainCat),raised_at:new Date().toISOString(),
         sla_deadline:new Date(Date.now()+hrs*3600000).toISOString(),note:""
       };
       const result=await sbPost("tickets",ticket);
       const saved=result[0]||ticket;
-      await sbPost("audit_log",{ticket_id:saved.id,action:"Ticket Created",changed_by:user.name,new_value:`Open — Assigned to ${catDef.assignTo}`});
+      await sbPost("audit_log",{ticket_id:saved.id,action:"Ticket Created",changed_by:user.name,new_value:`Open — ${getL1ForTeam(mainCat)?'Assigned to '+getL1ForTeam(mainCat)+' (L1)':'Unassigned — awaiting L1 acceptance'}`});
       setSubmitted(saved);
     }catch(e){setErr("Failed to submit. Please try again.");}
     setLoading(false);
@@ -619,9 +624,24 @@ function RaiseTicket({user,slaConfig,onDone}){
             <textarea style={{...INP,minHeight:100,resize:"vertical"}} placeholder="Describe the issue in detail..." value={desc} onChange={e=>setDesc(e.target.value)}/>
           </div>
           {catDef&&(
-            <div style={{background:catDef.bg,border:`1px solid ${catDef.color}30`,borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:8}}>
-              <User size={14} color={catDef.color}/>
-              <span style={{color:catDef.color,fontSize:13,fontWeight:600}}>Will be assigned to: <strong>{catDef.assignTo}</strong></span>
+            <div style={{background:catDef.bg,border:`1px solid ${catDef.color}30`,borderRadius:12,padding:"12px 14px"}}>
+              <p style={{color:catDef.color,fontSize:11,fontWeight:700,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>👥 Who will attend your ticket</p>
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{background:"#f0fdf4",color:"#16a34a",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:4,border:"1px solid #bbf7d0",minWidth:24,textAlign:"center"}}>L1</span>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    {TEAM_CONFIG[mainCat]?.l1?.map(s=>(
+                      <span key={s.id} style={{background:"#fff",color:"#374151",fontSize:12,fontWeight:600,padding:"4px 10px",borderRadius:6,border:"1px solid #e5e7eb"}}>👤 {s.name}</span>
+                    ))}
+                  </div>
+                  <span style={{color:"#9ca3af",fontSize:11,marginLeft:"auto"}}>First response</span>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{background:LIGHT,color:RED,fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:4,border:`1px solid ${RED}30`,minWidth:24,textAlign:"center"}}>L2</span>
+                  <span style={{background:"#fff",color:"#374151",fontSize:12,fontWeight:600,padding:"4px 10px",borderRadius:6,border:"1px solid #e5e7eb"}}>👤 {getL2ForTeam(mainCat)}</span>
+                  <span style={{color:"#9ca3af",fontSize:11,marginLeft:"auto"}}>Escalation</span>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -714,9 +734,7 @@ function TechnicianApp({user,onLogout}){
   const load=useCallback(async()=>{
     setLoading(true);
     try{
-      // L1 sees unassigned OR tickets assigned to them; L2 sees tickets assigned to them
-      let q=`software=eq.${user.team}&order=raised_at.desc`;
-      const rows=await sbGet("tickets",q);
+      const rows=await sbGet("tickets",`software=eq.${user.team}&order=raised_at.desc`);
       setTickets(rows);
     }catch(e){setErr("Failed to load tickets.");}
     setLoading(false);
@@ -729,9 +747,9 @@ function TechnicianApp({user,onLogout}){
     return t.status===filter;
   });
 
-  const myTickets=filtered.filter(t=>t.assigned_to===user.name);
   const unassigned=filtered.filter(t=>!t.assigned_to||t.assigned_to==="");
-  const showTickets=user.level==="L1"?[...unassigned,...myTickets]:myTickets;
+  const assigned=filtered.filter(t=>t.assigned_to&&t.assigned_to!=="");
+  const showTickets=[...unassigned,...assigned];
 
   const breached=tickets.filter(t=>isSlaBreached(t)).length;
   const open=tickets.filter(t=>t.status==="Open"||t.status==="In Progress").length;
@@ -1046,7 +1064,12 @@ function TicketDetail({ticketId,tickets,onBack,onUpdate}){
   const cat=MAIN_CATEGORIES[t.software];
   const breachedT=isSlaBreached(t);
 
-  const ASSIGNEES=["Hari B S","Sachin Mahadik","Jagdish More"];
+  // Build assignee list from ticket's team — all L1 + L2 for that category
+  const ticketTeam=t.software||"software";
+  const teamStaff=[
+    ...(TEAM_CONFIG[ticketTeam]?.l1||[]).map(s=>({...s,level:"L1"})),
+    ...(TEAM_CONFIG[ticketTeam]?.l2||[]).map(s=>({...s,level:"L2"})),
+  ];
 
   async function updateField(field,value){
     setSaving(true);
@@ -1125,10 +1148,27 @@ function TicketDetail({ticketId,tickets,onBack,onUpdate}){
       {/* Reassign */}
       <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
         <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:12,textTransform:"uppercase",letterSpacing:"0.5px"}}>Assign To</p>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-          {ASSIGNEES.map(a=>(
-            <button key={a} onClick={()=>updateField("assigned_to",a)} disabled={saving} style={{padding:"8px 14px",borderRadius:8,border:`2px solid ${t.assigned_to===a?RED:"#e5e7eb"}`,background:t.assigned_to===a?LIGHT:"#fff",color:t.assigned_to===a?RED:"#6b7280",fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .2s"}}>{a}</button>
-          ))}
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {["L1","L2"].map(lvl=>{
+            const group=teamStaff.filter(s=>s.level===lvl);
+            if(!group.length)return null;
+            return(
+              <div key={lvl}>
+                <p style={{color:"#9ca3af",fontSize:11,fontWeight:700,marginBottom:6}}>{lvl} — {lvl==="L1"?"First Response":"Technical"}</p>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  {group.map(s=>(
+                    <button key={s.id} onClick={()=>updateField("assigned_to",s.name)} disabled={saving}
+                      style={{padding:"8px 14px",borderRadius:8,border:`2px solid ${t.assigned_to===s.name?lvl==="L2"?RED:"#16a34a":"#e5e7eb"}`,
+                        background:t.assigned_to===s.name?lvl==="L2"?LIGHT:"#f0fdf4":"#fff",
+                        color:t.assigned_to===s.name?lvl==="L2"?RED:"#16a34a":"#6b7280",
+                        fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .2s"}}>
+                      {s.name}{t.assigned_to===s.name?" ✓":""}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -1206,7 +1246,7 @@ function Reports({tickets}){
   });
 
   // By assignee
-  const assignees=["Hari B S","Sachin Mahadik","Jagdish More"];
+  const assignees=[...new Set(getAllStaff().map(s=>s.name))];
   const byAssignee=assignees.map(a=>{
     const at=filtered.filter(t=>t.assigned_to===a);
     const ar=at.filter(t=>t.status==="Resolved"||t.status==="Closed").length;
@@ -1791,7 +1831,7 @@ function AdminApp({onLogout}){
                     </select>
                     <select style={{...SEL,padding:"8px 10px",fontSize:12,width:"auto"}} value={filterAssignee} onChange={e=>setFilterAssignee(e.target.value)}>
                       <option value="all">All Assignees</option>
-                      {["Hari B S","Sachin Mahadik","Jagdish More"].map(a=><option key={a} value={a}>{a}</option>)}
+                      {getAllStaff().map(s=><option key={s.id} value={s.name}>{s.name} ({s.level})</option>)}
                     </select>
                   </div>
                   <p className="fu2" style={{color:"#9ca3af",fontSize:12,marginBottom:12}}>{filtered.length} ticket{filtered.length!==1?"s":""}</p>
