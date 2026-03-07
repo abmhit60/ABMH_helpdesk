@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Bug, RefreshCw, GraduationCap, LayoutDashboard, Plus, LogOut,
   Clock, CheckCircle, AlertTriangle, ChevronRight, FileText,
@@ -147,6 +147,13 @@ function DateRangePicker({startDate,endDate,onChange}){
   const [open,setOpen]=useState(false);
   const [viewMonth,setViewMonth]=useState(new Date());
   const [selecting,setSelecting]=useState(null); // "start"|"end"
+  const ref=useRef(null);
+
+  useEffect(()=>{
+    function handleClick(e){if(ref.current&&!ref.current.contains(e.target)){setOpen(false);setSelecting(null);}}
+    if(open)document.addEventListener("mousedown",handleClick);
+    return()=>document.removeEventListener("mousedown",handleClick);
+  },[open]);
 
   const days=["Su","Mo","Tu","We","Th","Fr","Sa"];
   const monthNames=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -184,13 +191,13 @@ function DateRangePicker({startDate,endDate,onChange}){
   const label=startDate?`${fmtDate(startDate.toISOString())}${endDate?" → "+fmtDate(endDate.toISOString()):"…"}`:"Select date range";
 
   return(
-    <div style={{position:"relative",zIndex:100}}>
+    <div ref={ref} style={{position:"relative",zIndex:999}}>
       <button onClick={()=>{setOpen(!open);setSelecting("start");}} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:"#fff",border:`1.5px solid ${open?RED:"#e5e7eb"}`,borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600,color:startDate?RED:"#6b7280",width:"100%",justifyContent:"space-between"}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}><Calendar size={15} color={startDate?RED:"#9ca3af"}/>{label}</div>
         <ChevronDown size={14} color="#9ca3af"/>
       </button>
       {open&&(
-        <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,boxShadow:"0 8px 32px rgba(0,0,0,0.12)",minWidth:280,zIndex:200}}>
+        <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,boxShadow:"0 8px 40px rgba(0,0,0,0.18)",minWidth:300,zIndex:9999}} onClick={e=>e.stopPropagation()}>
           {/* Month nav */}
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
             <button onClick={()=>setViewMonth(new Date(y,m-1,1))} style={{background:"none",border:"none",cursor:"pointer",padding:4,borderRadius:6,color:"#6b7280"}}><ChevronLeft size={16}/></button>
@@ -415,11 +422,11 @@ function RaiseTicket({user,slaConfig,onDone}){
 
       {/* Step 1 — Main Category */}
       <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>1. Category</p>
-      <div className="fu1" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:20}}>
+      <div className="fu1" style={{display:"flex",gap:10,marginBottom:20}}>
         {Object.entries(MAIN_CATEGORIES).map(([key,cat])=>(
-          <button key={key} onClick={()=>{setMainCat(key);setSubCat("");setModule("");}} style={{padding:"14px 8px",borderRadius:12,border:`2px solid ${mainCat===key?cat.color:"#e5e7eb"}`,background:mainCat===key?cat.bg:"#fff",cursor:"pointer",transition:"all .2s",textAlign:"center"}}>
-            <cat.icon size={20} color={mainCat===key?cat.color:"#9ca3af"} style={{margin:"0 auto 6px"}}/>
-            <p style={{color:mainCat===key?cat.color:"#1a1a2e",fontWeight:800,fontSize:13}}>{cat.label}</p>
+          <button key={key} onClick={()=>{setMainCat(key);setSubCat("");setModule("");}} style={{flex:1,minWidth:0,padding:"14px 6px",borderRadius:12,border:`2px solid ${mainCat===key?cat.color:"#e5e7eb"}`,background:mainCat===key?cat.bg:"#fff",cursor:"pointer",transition:"all .2s",textAlign:"center"}}>
+            <cat.icon size={20} color={mainCat===key?cat.color:"#9ca3af"} style={{margin:"0 auto 6px",display:"block"}}/>
+            <p style={{color:mainCat===key?cat.color:"#1a1a2e",fontWeight:800,fontSize:12,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{cat.label}</p>
           </button>
         ))}
       </div>
