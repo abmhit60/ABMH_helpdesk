@@ -135,7 +135,7 @@ const ISSUE_TYPES=[
 
 const DEPARTMENTS=["OPD","IPD","Emergency","Pharmacy","Radiology","Lab / Pathology","Billing","EMR","Admission","ICU","OT","HR","Administration","Blood Bank","CSSD","Dietary","Housekeeping","IT & Networking","Laundry","Maintenance","Medical Records","Mortuary","Neonatology","Nephrology","Neurology","Oncology","Physiotherapy","Security","Social Work","Transplant"];
 const PRIORITIES=["Critical","High","Medium","Low"];
-const STATUSES=["Open","In Progress","Resolved","Closed"];
+const STATUSES=["Open","In Progress","Resolved"];
 
 // ─── Team / Escalation Config ─────────────────────────────────────────────────
 const TEAM_CONFIG = {
@@ -194,15 +194,12 @@ const DEFAULT_SLA={
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function genId(){const d=new Date();return `TKT-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}-${String(Math.floor(Math.random()*9000)+1000)}`;}
 function isSlaBreached(t){
-  // Open ticket past deadline
-  if(t.status!=="Resolved"&&t.status!=="Closed") return new Date(t.sla_deadline)<new Date();
-  // Resolved but resolved_at was after deadline
+  if(t.status!=="Resolved") return new Date(t.sla_deadline)<new Date();
   if(t.resolved_at) return new Date(t.resolved_at)>new Date(t.sla_deadline);
   return false;
 }
 function isWithinOla(t){
-  // Only counts as within OLA if resolved AND resolved before deadline
-  if(t.status!=="Resolved"&&t.status!=="Closed") return false;
+  if(t.status!=="Resolved") return false;
   if(!t.resolved_at) return false;
   return new Date(t.resolved_at)<=new Date(t.sla_deadline);
 }
@@ -217,7 +214,7 @@ function pct(num,den){return den===0?0:Math.round((num/den)*100);}
 
 // ─── Shared UI ────────────────────────────────────────────────────────────────
 function StatusBadge({status}){
-  const m={"Open":{c:"#0369a1",bg:"#eff6ff"},"In Progress":{c:"#d97706",bg:"#fffbeb"},"Resolved":{c:"#16a34a",bg:"#f0fdf4"},"Closed":{c:"#6b7280",bg:"#f9fafb"}};
+  const m={"Open":{c:"#0369a1",bg:"#eff6ff"},"In Progress":{c:"#d97706",bg:"#fffbeb"},"Resolved":{c:"#16a34a",bg:"#f0fdf4"},"Resolved":{c:"#6b7280",bg:"#f9fafb"}};
   const s=m[status]||m["Open"];
   return <span style={{background:s.bg,color:s.c,padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:700,border:`1px solid ${s.c}30`}}>{status}</span>;
 }
@@ -1242,7 +1239,7 @@ function Reports({tickets}){
   });
 
   const total=filtered.length;
-  const resolved=filtered.filter(t=>t.status==="Resolved"||t.status==="Closed").length;
+  const resolved=filtered.filter(t=>t.status==="Resolved"||false).length;
   const resolvedInTat=filtered.filter(t=>isWithinOla(t)).length;
   const breached=filtered.filter(t=>isSlaBreached(t)).length;
   const avgRes=resolved>0?Math.round(filtered.filter(t=>t.resolved_at).reduce((a,t)=>a+(new Date(t.resolved_at)-new Date(t.raised_at))/3600000,0)/resolved):0;
@@ -1252,7 +1249,7 @@ function Reports({tickets}){
   // By main category
   const byCat=Object.entries(MAIN_CATEGORIES).map(([key,cat])=>{
     const catTickets=filtered.filter(t=>t.software===key);
-    const catResolved=catTickets.filter(t=>t.status==="Resolved"||t.status==="Closed").length;
+    const catResolved=catTickets.filter(t=>t.status==="Resolved"||false).length;
     const catInTat=catTickets.filter(t=>isWithinOla(t)).length;
     return{key,label:cat.label,color:cat.color,bg:cat.bg,count:catTickets.length,resolved:catResolved,inTat:catInTat,compliance:catResolved>0?pct(catInTat,catResolved):null};
   });
@@ -1261,7 +1258,7 @@ function Reports({tickets}){
   const assignees=[...new Set(getAllStaff().map(s=>s.name))];
   const byAssignee=assignees.map(a=>{
     const at=filtered.filter(t=>t.assigned_to===a);
-    const ar=at.filter(t=>t.status==="Resolved"||t.status==="Closed").length;
+    const ar=at.filter(t=>t.status==="Resolved"||false).length;
     const ai=at.filter(t=>isWithinOla(t)).length;
     return{name:a,total:at.length,resolved:ar,inTat:ai,compliance:ar>0?pct(ai,ar):null};
   });
@@ -1269,7 +1266,7 @@ function Reports({tickets}){
   // By priority
   const byPriority=PRIORITIES.map(p=>{
     const pt=filtered.filter(t=>t.priority===p);
-    const pr=pt.filter(t=>t.status==="Resolved"||t.status==="Closed").length;
+    const pr=pt.filter(t=>t.status==="Resolved"||false).length;
     const pi=pt.filter(t=>isWithinOla(t)).length;
     return{priority:p,total:pt.length,resolved:pr,inTat:pi,compliance:pr>0?pct(pi,pr):null};
   });
@@ -1696,7 +1693,7 @@ function AdminApp({onLogout}){
 
   const total=tickets.length;
   const open=tickets.filter(t=>t.status==="Open").length;
-  const resolved=tickets.filter(t=>t.status==="Resolved"||t.status==="Closed").length;
+  const resolved=tickets.filter(t=>t.status==="Resolved"||false).length;
   const breached=tickets.filter(t=>isSlaBreached(t)).length;
 
   const filtered=tickets.filter(t=>
