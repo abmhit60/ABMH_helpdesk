@@ -46,11 +46,17 @@ st.textContent=`
   button{font-family:'Plus Jakarta Sans',sans-serif;}
   /* ── Desktop full-screen layout ── */
   @media(min-width:768px){
-    .page-shell{display:grid!important;grid-template-columns:220px 1fr;min-height:100vh;max-width:100%!important;}
+    /* Admin layout */
+    .page-shell{display:grid!important;grid-template-columns:240px 1fr;min-height:100vh;max-width:100%!important;width:100%!important;}
     .sidebar{display:flex!important;flex-direction:column;}
     .bottom-nav{display:none!important;}
-    .main-topbar{left:220px!important;width:calc(100% - 220px)!important;transform:none!important;max-width:100%!important;right:0;}
-    .main-scroll{max-width:960px;margin:0 auto;width:100%;}
+    .main-topbar{left:240px!important;width:calc(100% - 240px)!important;transform:none!important;max-width:none!important;right:0!important;}
+    /* User layout */
+    .user-shell{display:grid!important;grid-template-columns:220px 1fr!important;min-height:100vh;max-width:100%!important;width:100%!important;margin:0!important;}
+    .user-sidebar{display:flex!important;}
+    .user-topbar{left:220px!important;width:calc(100% - 220px)!important;transform:none!important;max-width:none!important;right:0!important;}
+    .user-bottom-nav{display:none!important;}
+    .user-content{padding-top:68px!important;}
     .login-shell{align-items:center;}
   }
 `;
@@ -424,9 +430,9 @@ function RaiseTicket({user,slaConfig,onDone}){
       <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>1. Category</p>
       <div className="fu1" style={{display:"flex",gap:10,marginBottom:20}}>
         {Object.entries(MAIN_CATEGORIES).map(([key,cat])=>(
-          <button key={key} onClick={()=>{setMainCat(key);setSubCat("");setModule("");}} style={{flex:1,minWidth:0,padding:"14px 6px",borderRadius:12,border:`2px solid ${mainCat===key?cat.color:"#e5e7eb"}`,background:mainCat===key?cat.bg:"#fff",cursor:"pointer",transition:"all .2s",textAlign:"center"}}>
+          <button key={key} onClick={()=>{setMainCat(key);setSubCat("");setModule("");}} style={{flex:1,minWidth:0,padding:"12px 4px",borderRadius:12,border:`2px solid ${mainCat===key?cat.color:"#e5e7eb"}`,background:mainCat===key?cat.bg:"#fff",cursor:"pointer",transition:"all .2s",textAlign:"center"}}>
             <cat.icon size={20} color={mainCat===key?cat.color:"#9ca3af"} style={{margin:"0 auto 6px",display:"block"}}/>
-            <p style={{color:mainCat===key?cat.color:"#1a1a2e",fontWeight:800,fontSize:12,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{cat.label}</p>
+            <p style={{color:mainCat===key?cat.color:"#1a1a2e",fontWeight:800,fontSize:11,lineHeight:1.3,wordBreak:"break-word"}}>{cat.label}</p>
           </button>
         ))}
       </div>
@@ -576,32 +582,59 @@ function MyTickets({empId}){
 // ─── User App ─────────────────────────────────────────────────────────────────
 function UserApp({user,slaConfig,onLogout}){
   const [tab,setTab]=useState("raise");
+  const NAV=[["raise",Plus,"Raise Ticket"],["mine",Ticket,"My Tickets"]];
   return(
-    <div className="page-shell" style={{minHeight:"100vh",background:"#f5f6fa",display:"flex",flexDirection:"column",maxWidth:480,margin:"0 auto",width:"100%"}}>
-      {/* Top bar */}
-      <div className="main-topbar" style={{position:"fixed",top:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,zIndex:10}}>
-        <div style={{height:4,background:`linear-gradient(90deg,${RED},${DARK})`}}/>
-        <div style={{background:"#fff",borderBottom:"1px solid #e5e7eb",padding:"12px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
-          <img src="/abmh-logo-1.png" alt="ABMH" style={{height:32,objectFit:"contain"}}/>
-          <div style={{textAlign:"right"}}>
-            <p style={{color:"#1a1a2e",fontWeight:700,fontSize:13,lineHeight:1}}>{user.name}</p>
+    <div className="user-shell" style={{minHeight:"100vh",background:"#f5f6fa",display:"flex",flexDirection:"column",width:"100%"}}>
+      {/* Desktop sidebar - hidden on mobile via CSS */}
+      <div className="user-sidebar" style={{display:"none",background:"#fff",borderRight:"1px solid #e5e7eb",flexDirection:"column",height:"100vh",position:"sticky",top:0,zIndex:20}}>
+        <div style={{padding:"16px 20px",borderBottom:"1px solid #e5e7eb"}}>
+          <img src="/abmh-logo-1.png" alt="ABMH" style={{height:36,objectFit:"contain",maxWidth:"100%"}}/>
+        </div>
+        <div style={{padding:"12px 12px 8px",borderBottom:"1px solid #f3f4f6"}}>
+          <div style={{background:LIGHT,borderRadius:10,padding:"10px 12px"}}>
+            <p style={{color:"#1a1a2e",fontWeight:700,fontSize:13}}>{user.name}</p>
             <p style={{color:"#9ca3af",fontSize:11,marginTop:2}}>{user.department}</p>
           </div>
-          <button onClick={onLogout} style={{background:"#f3f4f6",border:"1px solid #e5e7eb",borderRadius:8,padding:"6px 10px",cursor:"pointer",color:"#6b7280",display:"flex",alignItems:"center",gap:4,fontSize:12,fontWeight:600}}>
-            <LogOut size={14}/> Out
+        </div>
+        {NAV.map(([id,Icon,label])=>(
+          <button key={id} onClick={()=>setTab(id)} style={{display:"flex",alignItems:"center",gap:10,padding:"14px 20px",border:"none",cursor:"pointer",background:tab===id?LIGHT:"transparent",color:tab===id?RED:"#6b7280",fontWeight:tab===id?700:500,fontSize:14,borderLeft:`3px solid ${tab===id?RED:"transparent"}`,transition:"all .2s",textAlign:"left"}}>
+            <Icon size={18}/>{label}
+          </button>
+        ))}
+        <div style={{marginTop:"auto",padding:20,borderTop:"1px solid #e5e7eb"}}>
+          <button onClick={onLogout} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",cursor:"pointer",color:"#6b7280",fontSize:13,fontWeight:600}}>
+            <LogOut size={16}/>Logout
           </button>
         </div>
       </div>
-      <div style={{flex:1,overflowY:"auto",paddingTop:84,paddingBottom:90}}>
-        {tab==="raise"?<RaiseTicket user={user} slaConfig={slaConfig} onDone={()=>setTab("mine")}/>:<MyTickets empId={user.empId}/>}
-      </div>
-      <div className="bottom-nav" style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:"#fff",borderTop:"1px solid #e5e7eb",display:"flex",boxShadow:"0 -2px 8px rgba(0,0,0,0.06)"}}>
-        {[["raise",Plus,"Raise Ticket"],["mine",Ticket,"My Tickets"]].map(([id,Icon,label])=>(
-          <button key={id} onClick={()=>setTab(id)} style={{flex:1,padding:"12px 0 8px",background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-            <Icon size={20} color={tab===id?RED:"#9ca3af"}/>
-            <span style={{fontSize:11,color:tab===id?RED:"#9ca3af",fontWeight:tab===id?700:500}}>{label}</span>
-          </button>
-        ))}
+      {/* Main area */}
+      <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0}}>
+        {/* Top bar */}
+        <div className="user-topbar" style={{position:"fixed",top:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,zIndex:10}}>
+          <div style={{height:4,background:`linear-gradient(90deg,${RED},${DARK})`}}/>
+          <div style={{background:"#fff",borderBottom:"1px solid #e5e7eb",padding:"12px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
+            <img src="/abmh-logo-1.png" alt="ABMH" style={{height:32,objectFit:"contain"}}/>
+            <div style={{textAlign:"center"}}>
+              <p style={{color:"#1a1a2e",fontWeight:700,fontSize:13,lineHeight:1}}>{user.name}</p>
+              <p style={{color:"#9ca3af",fontSize:11,marginTop:2}}>{user.department}</p>
+            </div>
+            <button onClick={onLogout} style={{background:"#f3f4f6",border:"1px solid #e5e7eb",borderRadius:8,padding:"6px 10px",cursor:"pointer",color:"#6b7280",display:"flex",alignItems:"center",gap:4,fontSize:12,fontWeight:600}}>
+              <LogOut size={14}/> Out
+            </button>
+          </div>
+        </div>
+        <div className="user-content" style={{flex:1,overflowY:"auto",paddingTop:84,paddingBottom:90}}>
+          {tab==="raise"?<RaiseTicket user={user} slaConfig={slaConfig} onDone={()=>setTab("mine")}/>:<MyTickets empId={user.empId}/>}
+        </div>
+        {/* Mobile bottom nav */}
+        <div className="user-bottom-nav" style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:"#fff",borderTop:"1px solid #e5e7eb",display:"flex",boxShadow:"0 -2px 8px rgba(0,0,0,0.06)"}}>
+          {NAV.map(([id,Icon,label])=>(
+            <button key={id} onClick={()=>setTab(id)} style={{flex:1,padding:"12px 0 8px",background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+              <Icon size={20} color={tab===id?RED:"#9ca3af"}/>
+              <span style={{fontSize:11,color:tab===id?RED:"#9ca3af",fontWeight:tab===id?700:500}}>{label}</span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
