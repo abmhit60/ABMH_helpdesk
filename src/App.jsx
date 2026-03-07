@@ -1271,7 +1271,7 @@ function Reports({tickets}){
     return{priority:p,total:pt.length,resolved:pr,inTat:pi,compliance:pr>0?pct(pi,pr):null};
   });
 
-  const maxCat=Math.max(...byCat.map(c=>c.count),1);
+  
 
   function complianceColor(pct){return pct>=90?"#16a34a":pct>=70?"#d97706":"#dc2626";}
 
@@ -1367,72 +1367,108 @@ function Reports({tickets}){
       </div>
 
       {/* By Category */}
-      <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
-        <p style={{color:"#1a1a2e",fontWeight:700,fontSize:14,marginBottom:14}}>By Category — OLA Compliance</p>
-        {byCat.map(c=>(
-          <div key={c.key} style={{marginBottom:14}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
-              <div style={{display:"flex",alignItems:"center",gap:6}}>
-                <span style={{background:c.bg,color:c.color,fontSize:11,padding:"2px 8px",borderRadius:6,fontWeight:700}}>{c.label}</span>
-                <span style={{color:"#6b7280",fontSize:12}}>{c.count} tickets</span>
+      <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:20,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+        <p style={{color:"#1a1a2e",fontWeight:700,fontSize:14,marginBottom:4}}>By Category — OLA Compliance</p>
+        <p style={{color:"#9ca3af",fontSize:11,marginBottom:16}}>% of resolved tickets completed within committed time</p>
+        {byCat.map(c=>{
+          const pctVal=c.compliance===null?0:c.compliance;
+          const clr=c.compliance===null?"#e5e7eb":complianceColor(c.compliance);
+          return(
+            <div key={c.key} style={{marginBottom:18}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{background:c.bg,color:c.color,fontSize:11,padding:"3px 10px",borderRadius:6,fontWeight:700}}>{c.label}</span>
+                  <span style={{color:"#9ca3af",fontSize:11}}>{c.count} tickets · {c.resolved} resolved</span>
+                </div>
+                <span style={{color:c.compliance===null?"#9ca3af":clr,fontWeight:800,fontSize:15,minWidth:48,textAlign:"right"}}>{c.compliance===null?"N/A":c.compliance+"%"}</span>
               </div>
-              <span style={{color:complianceColor(c.compliance),fontWeight:800,fontSize:13}}>{c.compliance===null?"N/A":c.compliance+"%"}</span>
+              {/* Full-width 0-100% bar */}
+              <div style={{height:14,background:"#f3f4f6",borderRadius:7,overflow:"hidden",position:"relative"}}>
+                <div style={{width:`${pctVal}%`,height:"100%",background:clr,borderRadius:7,transition:"width .8s",display:"flex",alignItems:"center",justifyContent:"flex-end",paddingRight:6}}>
+                  {pctVal>=15&&<span style={{color:"#fff",fontSize:10,fontWeight:700}}>{pctVal}%</span>}
+                </div>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:5}}>
+                <div style={{display:"flex",gap:14}}>
+                  <span style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"#9ca3af"}}><span style={{width:8,height:8,borderRadius:2,background:"#16a34a",display:"inline-block"}}/>Within OLA: {c.inTat}</span>
+                  <span style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"#9ca3af"}}><span style={{width:8,height:8,borderRadius:2,background:"#fca5a5",display:"inline-block"}}/>Breached: {c.resolved-c.inTat}</span>
+                </div>
+                {c.compliance!==null&&(
+                  <span style={{fontSize:11,fontWeight:700,color:clr}}>{c.compliance>=90?"🟢 Excellent":c.compliance>=70?"🟡 Good":"🔴 Needs Attention"}</span>
+                )}
+              </div>
             </div>
-            <div style={{height:8,background:"#f3f4f6",borderRadius:4,overflow:"hidden"}}>
-              <div style={{width:`${(c.count/maxCat)*100}%`,height:"100%",background:c.color,borderRadius:4,transition:"width .6s"}}/>
-            </div>
-            <div style={{display:"flex",gap:12,marginTop:4}}>
-              <span style={{color:"#9ca3af",fontSize:11}}>Resolved: {c.resolved}</span>
-              <span style={{color:"#16a34a",fontSize:11}}>Within OLA: {c.inTat}</span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Team Performance */}
-      <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
-        <p style={{color:"#1a1a2e",fontWeight:700,fontSize:14,marginBottom:14}}>Team Performance</p>
+      <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:20,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+        <p style={{color:"#1a1a2e",fontWeight:700,fontSize:14,marginBottom:4}}>Team Performance</p>
+        <p style={{color:"#9ca3af",fontSize:11,marginBottom:16}}>OLA % = Within OLA ÷ Resolved tickets × 100</p>
         {byAssignee.map(a=>(
           <div key={a.name} style={{marginBottom:16,paddingBottom:16,borderBottom:"1px solid #f9fafb"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-              <div style={{display:"flex",alignItems:"center",gap:6}}>
-                <div style={{width:28,height:28,borderRadius:"50%",background:LIGHT,border:`1px solid ${RED}30`,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  <User size={13} color={RED}/>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{width:32,height:32,borderRadius:"50%",background:LIGHT,border:`1.5px solid ${RED}30`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <User size={14} color={RED}/>
                 </div>
                 <span style={{fontWeight:700,fontSize:13,color:"#1a1a2e"}}>{a.name}</span>
               </div>
-              <span style={{color:a.compliance===null?"#9ca3af":complianceColor(a.compliance),fontWeight:800,fontSize:14}}>{a.compliance===null?"N/A":a.compliance+"% OLA"}</span>
+              <span style={{color:a.compliance===null?"#9ca3af":complianceColor(a.compliance),fontWeight:800,fontSize:15}}>{a.compliance===null?"N/A":a.compliance+"% OLA"}</span>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-              {[["Total",a.total,"#374151"],["Resolved",a.resolved,"#16a34a"],["Within OLA",a.inTat,"#0369a1"]].map(([l,v,c])=>(
-                <div key={l} style={{background:"#f9fafb",borderRadius:8,padding:"8px",textAlign:"center"}}>
-                  <p style={{color:c,fontWeight:800,fontSize:16}}>{v}</p>
-                  <p style={{color:"#9ca3af",fontSize:10,marginTop:2}}>{l}</p>
+            {/* Stats row */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
+              {[["Total",a.total,"#374151","#f9fafb"],["Resolved",a.resolved,"#16a34a","#f0fdf4"],["Within OLA",a.inTat,"#0369a1","#eff6ff"]].map(([l,v,c,bg])=>(
+                <div key={l} style={{background:bg,borderRadius:8,padding:"8px",textAlign:"center",border:`1px solid ${c}15`}}>
+                  <p style={{color:c,fontWeight:800,fontSize:18,lineHeight:1}}>{v}</p>
+                  <p style={{color:"#9ca3af",fontSize:10,marginTop:3}}>{l}</p>
                 </div>
               ))}
             </div>
-            <div style={{height:6,background:"#f3f4f6",borderRadius:3,overflow:"hidden",marginTop:8}}>
-              <div style={{width:`${a.compliance||0}%`,height:"100%",background:a.compliance===null?"#e5e7eb":complianceColor(a.compliance),borderRadius:3,transition:"width .6s"}}/>
-            </div>
+            {/* OLA compliance bar — always 0-100% scale */}
+            {a.compliance!==null&&(
+              <>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                  <span style={{fontSize:11,color:"#9ca3af"}}>OLA Compliance</span>
+                  <span style={{fontSize:11,fontWeight:700,color:complianceColor(a.compliance)}}>{a.compliance>=90?"🟢 Excellent":a.compliance>=70?"🟡 Good":"🔴 Needs Attention"}</span>
+                </div>
+                <div style={{height:12,background:"#f3f4f6",borderRadius:6,overflow:"hidden"}}>
+                  <div style={{width:`${a.compliance}%`,height:"100%",background:complianceColor(a.compliance),borderRadius:6,transition:"width .8s",display:"flex",alignItems:"center",justifyContent:"flex-end",paddingRight:6}}>
+                    {a.compliance>=15&&<span style={{color:"#fff",fontSize:10,fontWeight:700}}>{a.compliance}%</span>}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         ))}
       </div>
 
       {/* Priority breakdown */}
-      <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
-        <p style={{color:"#1a1a2e",fontWeight:700,fontSize:14,marginBottom:14}}>By Priority — OLA Compliance</p>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+      <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:20,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+        <p style={{color:"#1a1a2e",fontWeight:700,fontSize:14,marginBottom:4}}>By Priority — OLA Compliance</p>
+        <p style={{color:"#9ca3af",fontSize:11,marginBottom:16}}>OLA compliance rate per ticket priority</p>
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
           {byPriority.map(p=>{
             const pc={Critical:RED,High:"#dc2626",Medium:"#d97706",Low:"#16a34a"};
+            const pclr=pc[p.priority]||"#374151";
+            const compliance=p.compliance===null?0:p.compliance;
+            const bar=p.compliance===null?"#e5e7eb":complianceColor(p.compliance);
             return(
-              <div key={p.priority} style={{background:"#f9fafb",border:"1px solid #e5e7eb",borderRadius:10,padding:"12px"}}>
-                <PriorityBadge priority={p.priority}/>
-                <p style={{color:"#1a1a2e",fontWeight:800,fontSize:18,marginTop:8}}>{p.total}</p>
-                <p style={{color:"#9ca3af",fontSize:11,marginTop:2}}>tickets</p>
-                <div style={{marginTop:8,height:5,background:"#e5e7eb",borderRadius:3,overflow:"hidden"}}>
-                  <div style={{width:`${p.compliance}%`,height:"100%",background:complianceColor(p.compliance),borderRadius:3}}/>
+              <div key={p.priority} style={{display:"flex",alignItems:"center",gap:12}}>
+                <div style={{minWidth:80}}>
+                  <PriorityBadge priority={p.priority}/>
+                  <p style={{color:"#9ca3af",fontSize:10,marginTop:3}}>{p.total} tickets</p>
                 </div>
-                <p style={{color:p.compliance===null?"#9ca3af":complianceColor(p.compliance),fontSize:11,fontWeight:700,marginTop:4}}>{p.compliance===null?"No resolved tickets":p.compliance+"% within OLA"}</p>
+                <div style={{flex:1}}>
+                  <div style={{height:20,background:"#f3f4f6",borderRadius:6,overflow:"hidden",position:"relative"}}>
+                    <div style={{width:`${compliance}%`,height:"100%",background:bar,borderRadius:6,transition:"width .8s",display:"flex",alignItems:"center",justifyContent:"flex-end",paddingRight:8}}>
+                      {compliance>=20&&<span style={{color:"#fff",fontSize:11,fontWeight:700}}>{compliance}%</span>}
+                    </div>
+                    {compliance<20&&p.compliance!==null&&<span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:11,fontWeight:700,color:bar}}>{compliance}%</span>}
+                  </div>
+                  <p style={{color:p.compliance===null?"#9ca3af":bar,fontSize:10,marginTop:3,fontWeight:600}}>{p.compliance===null?"No resolved tickets yet":p.resolved+" resolved · "+p.inTat+" within OLA"}</p>
+                </div>
               </div>
             );
           })}
