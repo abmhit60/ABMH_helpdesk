@@ -5,7 +5,7 @@ import {
   Clock, CheckCircle, AlertTriangle, ChevronRight, FileText,
   Ticket, ArrowLeft, Bell, Loader, Settings,
   BarChart2, Download, Search, User, Edit3, Save, X,
-  Monitor, Wifi, Cpu, Calendar, ChevronLeft, ChevronDown
+  Monitor, Wifi, Cpu, Calendar, ChevronLeft, ChevronDown, Bell
 } from "lucide-react";
 
 // ─── Supabase ─────────────────────────────────────────────────────────────────
@@ -27,6 +27,20 @@ const sbPatch = async(t,q,b) =>{const r=await fetch(`${API}/${t}?${q}`,{method:"
 const fl=document.createElement("link");fl.rel="stylesheet";
 fl.href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap";
 document.head.appendChild(fl);
+
+// ─── Notification styles ───────────────────────────────────────────────────────
+const ns=document.createElement("style");
+ns.textContent=`
+@keyframes toastIn{from{transform:translateX(115%);opacity:0;}to{transform:translateX(0);opacity:1;}}
+@keyframes toastOut{from{transform:translateX(0);opacity:1;}to{transform:translateX(115%);opacity:0;}}
+.abmh-toast{animation:toastIn .35s cubic-bezier(.21,1.02,.73,1) forwards;}
+.abmh-toast.out{animation:toastOut .3s ease forwards;}
+.abmh-toast-wrap{position:fixed;bottom:80px;right:16px;z-index:99999;display:flex;flex-direction:column;gap:10px;max-width:320px;pointer-events:none;}
+.abmh-toast{pointer-events:all;background:#fff;border-radius:14px;padding:13px 14px;box-shadow:0 8px 32px rgba(0,0,0,0.18);display:flex;gap:10px;align-items:flex-start;cursor:pointer;}
+@keyframes bellPulse{0%{transform:rotate(0)}15%{transform:rotate(15deg)}30%{transform:rotate(-12deg)}45%{transform:rotate(8deg)}60%{transform:rotate(-5deg)}75%{transform:rotate(3deg)}100%{transform:rotate(0)}}
+.bell-ring{animation:bellPulse .6s ease;}
+`;
+document.head.appendChild(ns);
 
 const st=document.createElement("style");
 st.textContent=`
@@ -327,6 +341,285 @@ function DateRangePicker({startDate,endDate,onChange}){
       )}
     </>
   );
+}
+
+// ─── Notification System ──────────────────────────────────────────────────────
+const NOTIF_COLORS={
+  new_ticket:  {bg:"#eff6ff",border:"#bfdbfe",icon:"🎫",label:"New Ticket",tc:"#0369a1"},
+  in_progress: {bg:"#fffbeb",border:"#fde68a",icon:"🔧",label:"In Progress",tc:"#d97706"},
+  resolved:    {bg:"#f0fdf4",border:"#bbf7d0",icon:"✅",label:"Resolved",   tc:"#16a34a"},
+  breach:      {bg:"#fff0f0",border:"#fca5a5",icon:"🚨",label:"OLA Breach", tc:"#c41e3a"},
+  escalated:   {bg:"#f5f3ff",border:"#ddd6fe",icon:"⬆️",label:"Escalated",  tc:"#7c3aed"},
+};
+
+// Toast Component
+function ToastContainer({toasts,onDismiss}){
+  return ReactDOM.createPortal(
+    <div className="abmh-toast-wrap">
+      {toasts.map(t=>{
+        const cfg=NOTIF_COLORS[t.type]||NOTIF_COLORS.new_ticket;
+        return(
+          <div key={t.id} id={`toast-${t.id}`} className="abmh-toast" onClick={()=>onDismiss(t.id)}
+            style={{borderLeft:`4px solid ${cfg.border}`,background:cfg.bg}}>
+            <div style={{width:36,height:36,borderRadius:10,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:18,boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>{cfg.icon}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <p style={{color:cfg.tc,fontSize:12,fontWeight:800,marginBottom:2}}>{cfg.label}</p>
+              <p style={{color:"#1a1a2e",fontSize:12,fontWeight:600,marginBottom:2,lineHeight:1.3}}>{t.title}</p>
+              <p style={{color:"#6b7280",fontSize:11,lineHeight:1.3}}>{t.message}</p>
+              <p style={{color:"#9ca3af",fontSize:10,marginTop:3}}>Just now · tap to dismiss</p>
+            </div>
+          </div>
+        );
+      })}
+    </div>,
+    document.body
+  );
+}
+
+// Bell + Dropdown Component
+function BellNotifications({notifications,onMarkRead,onMarkAll}){
+  const [open,setOpen]=useState(false);
+  const [bellRing,setBellRing]=useState(false);
+  const ref=useRef(null);
+  const unread=notifications.filter(n=>!n.read).length;
+
+  // Ring bell when new notification arrives
+  useEffect(()=>{
+    if(unread>0){setBellRing(true);setTimeout(()=>setBellRing(false),700);}
+  },[unread]);
+
+  useEffect(()=>{
+    function onDown(e){if(ref.current&&!ref.current.contains(e.target))setOpen(false);}
+    document.addEventListener("mousedown",onDown);
+    return()=>document.removeEventListener("mousedown",onDown);
+  },[]);
+
+  const fmtAgo=(iso)=>{
+    const d=Date.now()-new Date(iso).getTime();
+    if(d<60000)return"Just now";
+    if(d<3600000)return`${Math.floor(d/60000)}m ago`;
+    if(d<86400000)return`${Math.floor(d/3600000)}h ago`;
+    return fmtDate(iso);
+  };
+
+  return(
+    <div ref={ref} style={{position:"relative"}}>
+      <button onClick={()=>setOpen(o=>!o)} className={bellRing?"bell-ring":""} style={{width:38,height:38,borderRadius:11,background:open?LIGHT:"#f9fafb",border:`1.5px solid ${open?RED:"#e5e7eb"}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",position:"relative",transition:"all .2s"}}>
+        <Bell size={17} color={open?RED:"#6b7280"}/>
+        {unread>0&&<span style={{position:"absolute",top:-5,right:-5,background:RED,color:"#fff",fontSize:9,fontWeight:800,minWidth:16,height:16,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid #fff",padding:"0 3px"}}>{unread>9?"9+":unread}</span>}
+      </button>
+
+      {open&&ReactDOM.createPortal(
+        <div style={{position:"fixed",top:(ref.current?.getBoundingClientRect().bottom||60)+window.scrollY+6,right:16,width:300,background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:16,boxShadow:"0 12px 40px rgba(0,0,0,0.18)",zIndex:99998,overflow:"hidden"}}>
+          <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{fontWeight:800,fontSize:13,color:"#1a1a2e"}}>Notifications {unread>0&&<span style={{color:RED,fontSize:11}}>({unread} new)</span>}</span>
+            {unread>0&&<button onClick={onMarkAll} style={{fontSize:11,color:RED,fontWeight:600,background:"none",border:"none",cursor:"pointer"}}>Mark all read</button>}
+          </div>
+          <div style={{maxHeight:340,overflowY:"auto"}}>
+            {notifications.length===0?(
+              <div style={{padding:"32px 16px",textAlign:"center"}}>
+                <p style={{fontSize:13,color:"#9ca3af"}}>No notifications yet</p>
+              </div>
+            ):notifications.map(n=>{
+              const cfg=NOTIF_COLORS[n.type]||NOTIF_COLORS.new_ticket;
+              return(
+                <div key={n.id} onClick={()=>onMarkRead(n.id)} style={{padding:"11px 16px",borderBottom:"1px solid #f9fafb",display:"flex",gap:10,cursor:"pointer",background:n.read?"#fff":"#fafbff",transition:"background .15s"}}>
+                  {!n.read&&<div style={{width:6,height:6,borderRadius:"50%",background:RED,flexShrink:0,marginTop:6}}/>}
+                  <div style={{width:30,height:30,borderRadius:8,background:cfg.bg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:14}}>{cfg.icon}</div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <p style={{fontSize:12,fontWeight:700,color:"#1a1a2e",marginBottom:1}}>{n.title}</p>
+                    <p style={{fontSize:11,color:"#6b7280",lineHeight:1.3}}>{n.message}</p>
+                    <p style={{fontSize:10,color:"#9ca3af",marginTop:2}}>{fmtAgo(n.created_at)}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {notifications.length>0&&(
+            <div style={{padding:"8px 16px",textAlign:"center",borderTop:"1px solid #f3f4f6"}}>
+              <p style={{fontSize:11,color:"#9ca3af"}}>Showing last {notifications.length} notifications</p>
+            </div>
+          )}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
+// useNotifications hook — handles Supabase Realtime + toast + bell
+function useNotifications(user){
+  const [toasts,setToasts]=useState([]);
+  const [notifications,setNotifications]=useState([]);
+  const [loading,setLoading]=useState(true);
+
+  // Load existing notifications from DB
+  useEffect(()=>{
+    if(!user)return;
+    loadNotifications();
+  },[user]);
+
+  async function loadNotifications(){
+    try{
+      let q=`order=created_at.desc&limit=eq.50`;
+      if(user.role==="user") q+=`&recipient_id=eq.${user.empId}`;
+      else if(user.role==="staff") q+=`&recipient_team=eq.${user.team}`;
+      // admin sees all
+      const rows=await sbGet("notifications",q);
+      setNotifications(rows);
+    }catch(e){/* notifications table may not exist yet */}
+    setLoading(false);
+  }
+
+  // Supabase Realtime subscription
+  useEffect(()=>{
+    if(!user)return;
+    // Connect to Supabase Realtime via WebSocket
+    const wsUrl=`${SUPABASE_URL.replace("https","wss")}/realtime/v1/websocket?apikey=${SUPABASE_KEY}&vsn=1.0.0`;
+    let ws;
+    let pingInterval;
+    try{
+      ws=new WebSocket(wsUrl);
+      ws.onopen=()=>{
+        // Join the tickets channel
+        ws.send(JSON.stringify({topic:"realtime:public:tickets",event:"phx_join",payload:{},ref:"1"}));
+        // Join notifications channel
+        ws.send(JSON.stringify({topic:"realtime:public:notifications",event:"phx_join",payload:{},ref:"2"}));
+        pingInterval=setInterval(()=>{ws.send(JSON.stringify({topic:"phoenix","event":"heartbeat",payload:{},ref:"hb"}));},30000);
+      };
+      ws.onmessage=(e)=>{
+        try{
+          const msg=JSON.parse(e.data);
+          if(msg.event==="INSERT"&&msg.topic==="realtime:public:tickets"){
+            handleNewTicket(msg.payload.record);
+          }
+          if(msg.event==="UPDATE"&&msg.topic==="realtime:public:tickets"){
+            handleTicketUpdate(msg.payload.record,msg.payload.old_record);
+          }
+          if(msg.event==="INSERT"&&msg.topic==="realtime:public:notifications"){
+            handleNewNotification(msg.payload.record);
+          }
+        }catch{}
+      };
+    }catch(e){}
+    return()=>{
+      if(ws)ws.close();
+      if(pingInterval)clearInterval(pingInterval);
+    };
+  },[user]);
+
+  function shouldReceive(record,type){
+    if(!user)return false;
+    if(user.role==="admin")return true;
+    if(user.role==="staff"){
+      // Technician sees new tickets + breaches for their team
+      if(type==="new_ticket"||type==="breach"||type==="escalated") return record.software===user.team;
+      return false;
+    }
+    if(user.role==="user"){
+      // Staff sees status updates on their own tickets
+      return record.emp_id===user.empId&&(type==="in_progress"||type==="resolved");
+    }
+    return false;
+  }
+
+  function handleNewTicket(record){
+    if(!shouldReceive(record,"new_ticket"))return;
+    const cat=MAIN_CATEGORIES[record.software];
+    pushToast("new_ticket",`New Ticket — ${record.id}`,`${record.category} · ${record.dept} · ${record.user_name}`);
+    saveNotification("new_ticket",`New Ticket — ${record.id}`,`${record.category} · ${record.dept} · ${record.user_name}`,record);
+  }
+
+  function handleTicketUpdate(record,old){
+    if(!old||record.status===old.status)return;
+    const newStatus=record.status;
+    if(newStatus==="In Progress"&&shouldReceive(record,"in_progress")){
+      pushToast("in_progress",`Ticket In Progress — ${record.id}`,`${record.assigned_to} is working on it`);
+      saveNotification("in_progress",`Ticket In Progress — ${record.id}`,`${record.assigned_to} is working on it`,record);
+    }
+    if(newStatus==="Resolved"&&shouldReceive(record,"resolved")){
+      pushToast("resolved",`Ticket Resolved — ${record.id}`,`${record.category} · Resolved by ${record.assigned_to}`);
+      saveNotification("resolved",`Ticket Resolved — ${record.id}`,`${record.category} · Resolved by ${record.assigned_to}`,record);
+    }
+  }
+
+  function handleNewNotification(record){
+    // New notification from DB — show toast if relevant to this user
+    if(user.role==="admin"||record.recipient_id===user?.empId||record.recipient_team===user?.team){
+      // Already handled by handleNewTicket/handleTicketUpdate if same session
+      // Just refresh the bell
+      setNotifications(prev=>[record,...prev.slice(0,49)]);
+    }
+  }
+
+  function pushToast(type,title,message){
+    const id=Date.now()+Math.random();
+    setToasts(prev=>[...prev,{id,type,title,message}]);
+    setTimeout(()=>{
+      const el=document.getElementById(`toast-${id}`);
+      if(el)el.classList.add("out");
+      setTimeout(()=>setToasts(prev=>prev.filter(t=>t.id!==id)),350);
+    },5000);
+  }
+
+  async function saveNotification(type,title,message,ticket){
+    try{
+      const n={
+        type,title,message,
+        ticket_id:ticket.id,
+        recipient_id:ticket.emp_id,       // staff who raised
+        recipient_team:ticket.software,   // technician team
+        read:false,
+        created_at:new Date().toISOString(),
+      };
+      await sbPost("notifications",n);
+    }catch{}
+  }
+
+  function dismissToast(id){
+    const el=document.getElementById(`toast-${id}`);
+    if(el)el.classList.add("out");
+    setTimeout(()=>setToasts(prev=>prev.filter(t=>t.id!==id)),350);
+  }
+
+  async function markRead(id){
+    setNotifications(prev=>prev.map(n=>n.id===id?{...n,read:true}:n));
+    try{await sbPatch("notifications",`id=eq.${id}`,{read:true});}catch{}
+  }
+
+  async function markAllRead(){
+    setNotifications(prev=>prev.map(n=>({...n,read:true})));
+    try{
+      if(user.role==="user") await sbPatch("notifications",`recipient_id=eq.${user.empId}&read=eq.false`,{read:true});
+      else if(user.role==="staff") await sbPatch("notifications",`recipient_team=eq.${user.team}&read=eq.false`,{read:true});
+      else await sbPatch("notifications","read=eq.false",{read:true});
+    }catch{}
+  }
+
+  // OLA breach checker — runs every 2 minutes
+  useEffect(()=>{
+    if(!user||user.role==="user")return;
+    const check=async()=>{
+      try{
+        const open=await sbGet("tickets","status=in.(Open,In%20Progress)&order=raised_at.asc");
+        open.forEach(t=>{
+          if(isSlaBreached(t)&&shouldReceive(t,"breach")){
+            // Only show once — check if we already toasted this breach
+            const key=`breach_${t.id}`;
+            if(!sessionStorage.getItem(key)){
+              sessionStorage.setItem(key,"1");
+              pushToast("breach",`OLA Breached — ${t.id}`,`${t.category} · ${t.user_name} · ${t.dept}`);
+            }
+          }
+        });
+      }catch{}
+    };
+    check();
+    const iv=setInterval(check,120000);
+    return()=>clearInterval(iv);
+  },[user]);
+
+  return{toasts,notifications,dismissToast,markRead,markAllRead};
 }
 
 // ─── Login Screen ─────────────────────────────────────────────────────────────
@@ -732,7 +1025,7 @@ function MyTickets({empId}){
 }
 
 // ─── Staff View (L1 / L2 Technician) ─────────────────────────────────────────
-function TechnicianApp({user,onLogout}){
+function TechnicianApp({user,onLogout,notifProps}){
   const [tickets,setTickets]=useState([]);
   const [loading,setLoading]=useState(true);
   const [selected,setSelected]=useState(null);
@@ -781,6 +1074,7 @@ function TechnicianApp({user,onLogout}){
             </div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <BellNotifications notifications={notifProps?.notifications||[]} onMarkRead={notifProps?.onMarkRead} onMarkAll={notifProps?.onMarkAll}/>
             <button onClick={load} style={{background:LIGHT,border:`1px solid ${RED}30`,borderRadius:8,padding:"6px 10px",cursor:"pointer",color:RED,fontSize:13,fontWeight:700}}>↻</button>
             <button onClick={onLogout} style={{background:"#f3f4f6",border:"1px solid #e5e7eb",borderRadius:8,padding:"6px 10px",cursor:"pointer",color:"#6b7280",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><LogOut size={14}/>Out</button>
           </div>
@@ -993,7 +1287,7 @@ function TechTicketDetail({ticketId,tickets,user,onBack,teamCat}){
 }
 
 // ─── User App ─────────────────────────────────────────────────────────────────
-function UserApp({user,slaConfig,onLogout}){
+function UserApp({user,slaConfig,onLogout,notifProps}){
   const [tab,setTab]=useState("raise");
   const NAV=[["raise",Plus,"Raise Ticket"],["mine",Ticket,"My Tickets"]];
   return(
@@ -1703,7 +1997,7 @@ function PasswordManager(){
 }
 
 // ─── Admin App ────────────────────────────────────────────────────────────────
-function AdminApp({onLogout}){
+function AdminApp({onLogout,notifProps}){
   const [tab,setTab]=useState("dashboard");
   const [tickets,setTickets]=useState([]);
   const [slaConfig,setSlaConfig]=useState([]);
@@ -1932,6 +2226,7 @@ function AdminApp({onLogout}){
 export default function App(){
   const [user,setUser]=useState(null);
   const [slaConfig,setSlaConfig]=useState([]);
+  const {toasts,notifications,dismissToast,markRead,markAllRead}=useNotifications(user);
 
   useEffect(()=>{
     if(user?.role==="user"){
@@ -1939,11 +2234,19 @@ export default function App(){
     }
   },[user]);
 
-  return user===null
-    ?<LoginScreen onLogin={setUser}/>
-    :user.role==="admin"
-      ?<AdminApp onLogout={()=>setUser(null)}/>
-      :user.role==="staff"
-        ?<TechnicianApp user={user} onLogout={()=>setUser(null)}/>
-        :<UserApp user={user} slaConfig={slaConfig} onLogout={()=>setUser(null)}/>;
+  const notifProps={notifications,onMarkRead:markRead,onMarkAll:markAllRead};
+
+  return(
+    <>
+      <ToastContainer toasts={toasts} onDismiss={dismissToast}/>
+      {user===null
+        ?<LoginScreen onLogin={setUser}/>
+        :user.role==="admin"
+          ?<AdminApp onLogout={()=>setUser(null)} notifProps={notifProps}/>
+          :user.role==="staff"
+            ?<TechnicianApp user={user} onLogout={()=>setUser(null)} notifProps={notifProps}/>
+            :<UserApp user={user} slaConfig={slaConfig} onLogout={()=>setUser(null)} notifProps={notifProps}/>
+      }
+    </>
+  );
 }
