@@ -1325,9 +1325,12 @@ function UserApp({user,slaConfig,onLogout,notifProps}){
               <p style={{color:"#1a1a2e",fontWeight:700,fontSize:13,lineHeight:1}}>{user.name}</p>
               <p style={{color:"#9ca3af",fontSize:11,marginTop:2}}>{user.department}</p>
             </div>
-            <button onClick={onLogout} style={{background:"#f3f4f6",border:"1px solid #e5e7eb",borderRadius:8,padding:"6px 10px",cursor:"pointer",color:"#6b7280",display:"flex",alignItems:"center",gap:4,fontSize:12,fontWeight:600}}>
-              <LogOut size={14}/> Out
-            </button>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <BellNotifications notifications={notifProps?.notifications||[]} onMarkRead={notifProps?.onMarkRead} onMarkAll={notifProps?.onMarkAll}/>
+              <button onClick={onLogout} style={{background:"#f3f4f6",border:"1px solid #e5e7eb",borderRadius:8,padding:"6px 10px",cursor:"pointer",color:"#6b7280",display:"flex",alignItems:"center",gap:4,fontSize:12,fontWeight:600}}>
+                <LogOut size={14}/> Out
+              </button>
+            </div>
           </div>
         </div>
         <div className="user-content" style={{flex:1,overflowY:"auto",paddingTop:84,paddingBottom:90}}>
@@ -2085,7 +2088,8 @@ function AdminApp({onLogout,notifProps}){
               <p style={{color:"#1a1a2e",fontWeight:700,fontSize:13,lineHeight:1}}>Admin Dashboard</p>
               {breached>0&&<p style={{color:RED,fontSize:11,marginTop:2}}>{breached} OLA breach{breached>1?"es":""}</p>}
             </div>
-            <div style={{display:"flex",gap:8}}>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <BellNotifications notifications={notifProps?.notifications||[]} onMarkRead={notifProps?.onMarkRead} onMarkAll={notifProps?.onMarkAll}/>
               <button onClick={load} style={{background:LIGHT,border:`1px solid ${RED}30`,borderRadius:8,padding:"6px 10px",cursor:"pointer",color:RED,fontSize:13,fontWeight:700}}>↻</button>
               <button onClick={onLogout} style={{background:"#f3f4f6",border:"1px solid #e5e7eb",borderRadius:8,padding:"6px 10px",cursor:"pointer",color:"#6b7280",display:"flex",alignItems:"center",gap:4,fontSize:12,fontWeight:600}}><LogOut size={14}/></button>
             </div>
