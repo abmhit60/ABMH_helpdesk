@@ -193,7 +193,19 @@ const DEFAULT_SLA={
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function genId(){const d=new Date();return `TKT-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}-${String(Math.floor(Math.random()*9000)+1000)}`;}
-function isSlaBreached(t){return t.status!=="Resolved"&&t.status!=="Closed"&&new Date(t.sla_deadline)<new Date();}
+function isSlaBreached(t){
+  // Open ticket past deadline
+  if(t.status!=="Resolved"&&t.status!=="Closed") return new Date(t.sla_deadline)<new Date();
+  // Resolved but resolved_at was after deadline
+  if(t.resolved_at) return new Date(t.resolved_at)>new Date(t.sla_deadline);
+  return false;
+}
+function isWithinOla(t){
+  // Only counts as within OLA if resolved AND resolved before deadline
+  if(t.status!=="Resolved"&&t.status!=="Closed") return false;
+  if(!t.resolved_at) return false;
+  return new Date(t.resolved_at)<=new Date(t.sla_deadline);
+}
 function fmt(iso){if(!iso)return"—";return new Date(iso).toLocaleString("en-IN",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});}
 function fmtDate(iso){if(!iso)return"—";return new Date(iso).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"});}
 function timeLeft(iso){const d=new Date(iso)-new Date();if(d<=0)return"BREACHED";const h=Math.floor(d/3600000),m=Math.floor((d%3600000)/60000);return h>0?`${h}h ${m}m left`:`${m}m left`;}
@@ -1231,8 +1243,8 @@ function Reports({tickets}){
 
   const total=filtered.length;
   const resolved=filtered.filter(t=>t.status==="Resolved"||t.status==="Closed").length;
-  const resolvedInTat=filtered.filter(t=>(t.status==="Resolved"||t.status==="Closed")&&t.resolved_at&&new Date(t.resolved_at)<=new Date(t.sla_deadline)).length;
-  const breached=filtered.filter(t=>isSlaBreached(t)||(t.resolved_at&&new Date(t.resolved_at)>new Date(t.sla_deadline))).length;
+  const resolvedInTat=filtered.filter(t=>isWithinOla(t)).length;
+  const breached=filtered.filter(t=>isSlaBreached(t)).length;
   const avgRes=resolved>0?Math.round(filtered.filter(t=>t.resolved_at).reduce((a,t)=>a+(new Date(t.resolved_at)-new Date(t.raised_at))/3600000,0)/resolved):0;
   const slaCompliance=pct(resolvedInTat,resolved||1);
   const resolutionRate=pct(resolved,total||1);
@@ -1241,8 +1253,8 @@ function Reports({tickets}){
   const byCat=Object.entries(MAIN_CATEGORIES).map(([key,cat])=>{
     const catTickets=filtered.filter(t=>t.software===key);
     const catResolved=catTickets.filter(t=>t.status==="Resolved"||t.status==="Closed").length;
-    const catInTat=catTickets.filter(t=>(t.status==="Resolved"||t.status==="Closed")&&t.resolved_at&&new Date(t.resolved_at)<=new Date(t.sla_deadline)).length;
-    return{key,label:cat.label,color:cat.color,bg:cat.bg,count:catTickets.length,resolved:catResolved,inTat:catInTat,compliance:pct(catInTat,catResolved||1)};
+    const catInTat=catTickets.filter(t=>isWithinOla(t)).length;
+    return{key,label:cat.label,color:cat.color,bg:cat.bg,count:catTickets.length,resolved:catResolved,inTat:catInTat,compliance:catResolved>0?pct(catInTat,catResolved):null};
   });
 
   // By assignee
@@ -1250,16 +1262,16 @@ function Reports({tickets}){
   const byAssignee=assignees.map(a=>{
     const at=filtered.filter(t=>t.assigned_to===a);
     const ar=at.filter(t=>t.status==="Resolved"||t.status==="Closed").length;
-    const ai=at.filter(t=>(t.status==="Resolved"||t.status==="Closed")&&t.resolved_at&&new Date(t.resolved_at)<=new Date(t.sla_deadline)).length;
-    return{name:a,total:at.length,resolved:ar,inTat:ai,compliance:pct(ai,ar||1)};
+    const ai=at.filter(t=>isWithinOla(t)).length;
+    return{name:a,total:at.length,resolved:ar,inTat:ai,compliance:ar>0?pct(ai,ar):null};
   });
 
   // By priority
   const byPriority=PRIORITIES.map(p=>{
     const pt=filtered.filter(t=>t.priority===p);
     const pr=pt.filter(t=>t.status==="Resolved"||t.status==="Closed").length;
-    const pi=pt.filter(t=>(t.status==="Resolved"||t.status==="Closed")&&t.resolved_at&&new Date(t.resolved_at)<=new Date(t.sla_deadline)).length;
-    return{priority:p,total:pt.length,resolved:pr,inTat:pi,compliance:pct(pi,pr||1)};
+    const pi=pt.filter(t=>isWithinOla(t)).length;
+    return{priority:p,total:pt.length,resolved:pr,inTat:pi,compliance:pr>0?pct(pi,pr):null};
   });
 
   const maxCat=Math.max(...byCat.map(c=>c.count),1);
@@ -1330,7 +1342,7 @@ function Reports({tickets}){
         {[
           {label:"Total Tickets",val:total,color:RED},
           {label:"Resolved",val:resolved,color:"#16a34a"},
-          {label:"OLA Compliance",val:`${slaCompliance}%`,color:complianceColor(slaCompliance)},
+          {label:"OLA Compliance",val:slaCompliance===null?"N/A":`${slaCompliance}%`,color:slaCompliance===null?"#9ca3af":complianceColor(slaCompliance)},
           {label:"Avg Resolution",val:`${avgRes}h`,color:"#0369a1"},
           {label:"Within OLA",val:resolvedInTat,color:"#16a34a"},
           {label:"OLA Breached",val:breached,color:"#dc2626"},
@@ -1353,7 +1365,7 @@ function Reports({tickets}){
         </div>
         <div style={{display:"flex",justifyContent:"space-between",marginTop:8}}>
           <span style={{color:"#9ca3af",fontSize:11}}>{resolved} of {total} tickets resolved</span>
-          <span style={{color:complianceColor(slaCompliance),fontSize:11,fontWeight:700}}>{slaCompliance}% within OLA</span>
+          <span style={{color:slaCompliance===null?"#9ca3af":complianceColor(slaCompliance),fontSize:11,fontWeight:700}}>{slaCompliance===null?"No resolved tickets yet":slaCompliance+"% within OLA"}</span>
         </div>
       </div>
 
@@ -1367,7 +1379,7 @@ function Reports({tickets}){
                 <span style={{background:c.bg,color:c.color,fontSize:11,padding:"2px 8px",borderRadius:6,fontWeight:700}}>{c.label}</span>
                 <span style={{color:"#6b7280",fontSize:12}}>{c.count} tickets</span>
               </div>
-              <span style={{color:complianceColor(c.compliance),fontWeight:800,fontSize:13}}>{c.compliance}%</span>
+              <span style={{color:complianceColor(c.compliance),fontWeight:800,fontSize:13}}>{c.compliance===null?"N/A":c.compliance+"%"}</span>
             </div>
             <div style={{height:8,background:"#f3f4f6",borderRadius:4,overflow:"hidden"}}>
               <div style={{width:`${(c.count/maxCat)*100}%`,height:"100%",background:c.color,borderRadius:4,transition:"width .6s"}}/>
@@ -1392,10 +1404,10 @@ function Reports({tickets}){
                 </div>
                 <span style={{fontWeight:700,fontSize:13,color:"#1a1a2e"}}>{a.name}</span>
               </div>
-              <span style={{color:complianceColor(a.compliance),fontWeight:800,fontSize:14}}>{a.compliance}% OLA</span>
+              <span style={{color:a.compliance===null?"#9ca3af":complianceColor(a.compliance),fontWeight:800,fontSize:14}}>{a.compliance===null?"N/A":a.compliance+"% OLA"}</span>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-              {[["Total",a.total,"#374151"],["Resolved",a.resolved,"#16a34a"],["In TAT",a.inTat,"#0369a1"]].map(([l,v,c])=>(
+              {[["Total",a.total,"#374151"],["Resolved",a.resolved,"#16a34a"],["Within OLA",a.inTat,"#0369a1"]].map(([l,v,c])=>(
                 <div key={l} style={{background:"#f9fafb",borderRadius:8,padding:"8px",textAlign:"center"}}>
                   <p style={{color:c,fontWeight:800,fontSize:16}}>{v}</p>
                   <p style={{color:"#9ca3af",fontSize:10,marginTop:2}}>{l}</p>
@@ -1403,7 +1415,7 @@ function Reports({tickets}){
               ))}
             </div>
             <div style={{height:6,background:"#f3f4f6",borderRadius:3,overflow:"hidden",marginTop:8}}>
-              <div style={{width:`${a.compliance}%`,height:"100%",background:complianceColor(a.compliance),borderRadius:3,transition:"width .6s"}}/>
+              <div style={{width:`${a.compliance||0}%`,height:"100%",background:a.compliance===null?"#e5e7eb":complianceColor(a.compliance),borderRadius:3,transition:"width .6s"}}/>
             </div>
           </div>
         ))}
@@ -1423,7 +1435,7 @@ function Reports({tickets}){
                 <div style={{marginTop:8,height:5,background:"#e5e7eb",borderRadius:3,overflow:"hidden"}}>
                   <div style={{width:`${p.compliance}%`,height:"100%",background:complianceColor(p.compliance),borderRadius:3}}/>
                 </div>
-                <p style={{color:complianceColor(p.compliance),fontSize:11,fontWeight:700,marginTop:4}}>{p.compliance}% within OLA</p>
+                <p style={{color:p.compliance===null?"#9ca3af":complianceColor(p.compliance),fontSize:11,fontWeight:700,marginTop:4}}>{p.compliance===null?"No resolved tickets":p.compliance+"% within OLA"}</p>
               </div>
             );
           })}
