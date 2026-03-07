@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import * as ReactDOM from "react-dom";
 import {
   Bug, RefreshCw, GraduationCap, LayoutDashboard, Plus, LogOut,
   Clock, CheckCircle, AlertTriangle, ChevronRight, FileText,
@@ -79,7 +80,7 @@ const MAIN_CATEGORIES = {
     }
   },
   hardware:{
-    label:"Hardware", icon:Cpu, color:"#d97706", bg:"#fffbeb",
+    label:"Hardware & Operations", icon:Cpu, color:"#d97706", bg:"#fffbeb",
     assignTo:"Sachin Mahadik",
     children:{
       "Desktop / Laptop":["System Not Starting","Slow Performance","Blue Screen / Crash","Keyboard / Mouse Issue","Monitor Issue","Upgradation Request","New Installation"],
@@ -87,6 +88,7 @@ const MAIN_CATEGORIES = {
       "UPS / Power":["UPS Not Working","Battery Backup Low","Power Fluctuation","UPS Beeping","Shutdown Issue"],
       "Biometric / Access Control":["Fingerprint Not Reading","Device Offline","Door Not Opening","Enrollment Issue","Software Sync Issue"],
       "Other Hardware":["Projector","TV / Display","CCTV","Barcode Scanner","Other"],
+      "Email / Server":["Email Not Working","Outlook Issue","Server Unreachable","Shared Drive Issue","Backup Issue"],
     }
   },
   network:{
@@ -97,10 +99,36 @@ const MAIN_CATEGORIES = {
       "WiFi Issues":["No WiFi Signal","Weak Signal","Cannot Connect","IP Conflict","New WiFi Point Request"],
       "Switch / Router":["Port Not Working","Switch Down","VLAN Issue","Configuration Change","New Point Request"],
       "IP Phone / EPABX":["Phone Dead","No Dial Tone","Extension Issue","EPABX Programming","New Extension Request"],
-      "Email / Server":["Email Not Working","Outlook Issue","Server Unreachable","Shared Drive Issue","Backup Issue"],
     }
   }
 };
+
+// ── OLA: Response time by sub-category (shown to user when raising ticket) ──
+const SUBCAT_RESPONSE = {
+  // Software
+  "HIS":1, "ERP":2, "PACS":1,
+  // Hardware
+  "Desktop / Laptop":2, "Printer / Scanner":2, "UPS / Power":1,
+  "Biometric / Access Control":2, "Other Hardware":4,
+  // Network
+  "Internet / Connectivity":1, "WiFi Issues":1, "Switch / Router":1,
+  "IP Phone / EPABX":2, "Email / Server":1,
+};
+function getResponseTime(subCat){ return SUBCAT_RESPONSE[subCat]||2; }
+
+// ── OLA: Resolution time by priority (set by technician, shown everywhere) ──
+const PRIORITY_RESOLUTION = {
+  software: { Critical:2,  High:4,  Medium:8,  Low:24 },
+  hardware: { Critical:4,  High:8,  Medium:24, Low:48 },
+  network:  { Critical:2,  High:4,  Medium:8,  Low:24 },
+};
+function getResolutionTime(mainCat,priority){
+  return PRIORITY_RESOLUTION[mainCat]?.[priority]||8;
+}
+// kept for backward compat in reports
+function getOlaTimes(mainCat,priority){
+  return {response:2, resolution:getResolutionTime(mainCat,priority)};
+}
 
 const ISSUE_TYPES=[
   {id:"bug",    label:"Bug / Error",         icon:Bug,          color:RED,      bg:"#fff0f0"},
@@ -111,6 +139,46 @@ const ISSUE_TYPES=[
 const DEPARTMENTS=["OPD","IPD","Emergency","Pharmacy","Radiology","Lab / Pathology","Billing","EMR","Admission","ICU","OT","HR","Administration","Blood Bank","CSSD","Dietary","Housekeeping","IT & Networking","Laundry","Maintenance","Medical Records","Mortuary","Neonatology","Nephrology","Neurology","Oncology","Physiotherapy","Security","Social Work","Transplant"];
 const PRIORITIES=["Critical","High","Medium","Low"];
 const STATUSES=["Open","In Progress","Resolved","Closed"];
+
+// ─── Team / Escalation Config ─────────────────────────────────────────────────
+const TEAM_CONFIG = {
+  software:{
+    l1:[{id:"R001",name:"Rushiraj Puri",  password:"Rushiraj2026"}],
+    l2:[{id:"9662",name:"Hari B S",       password:"Hari2026"}],
+    l3:"Suraj Kumar", l4:"Harshad Raut",
+  },
+  hardware:{
+    l1:[{id:"T001",name:"Thejas",  password:"Thejas2026"},{id:"A001",name:"Aarti",password:"Aarti2026"}],
+    l2:[{id:"10334",name:"Sachin Mahadik",password:"Sachin2026"}],
+    l3:"Suraj Kumar", l4:"Harshad Raut",
+  },
+  network:{
+    l1:[{id:"S001",name:"Swapnil",password:"Swapnil2026"}],
+    l2:[{id:"2128",name:"Jagdish More",password:"Jagdish2026"}],
+    l3:"Suraj Kumar", l4:"Harshad Raut",
+  },
+};
+// Flat list of all staff for login lookup
+function getAllStaff(){
+  const list=[];
+  Object.entries(TEAM_CONFIG).forEach(([team,cfg])=>{
+    cfg.l1.forEach(s=>list.push({...s,level:"L1",team}));
+    cfg.l2.forEach(s=>list.push({...s,level:"L2",team}));
+  });
+  return list;
+}
+function getStaffPasswords(){try{const s=localStorage.getItem("abmh_staff_pwd");return s?JSON.parse(s):{};}catch{return{};}}
+function saveStaffPasswords(o){try{localStorage.setItem("abmh_staff_pwd",JSON.stringify(o));}catch{}}
+function getAdminPassword(){try{return localStorage.getItem("abmh_admin_pwd")||"admin123";}catch{return"admin123";}}
+function saveAdminPassword(p){try{localStorage.setItem("abmh_admin_pwd",p);}catch{}}
+function verifyStaff(empId,password){
+  const overrides=getStaffPasswords();
+  const staff=getAllStaff().find(s=>s.id===empId);
+  if(!staff)return null;
+  const pwd=overrides[empId]||staff.password;
+  if(pwd!==password)return null;
+  return{role:"staff",level:staff.level,team:staff.team,name:staff.name,empId:staff.id};
+}
 
 const DEFAULT_SLA={
   software:{bug:{Critical:2,High:4,Medium:8,Low:24},cr:{Critical:48,High:72,Medium:72,Low:72},support:{Critical:1,High:1,Medium:2,Low:4}},
@@ -149,104 +217,101 @@ const SEL={...INP,appearance:"none",cursor:"pointer"};
 const BTN={background:`linear-gradient(135deg,${RED},${DARK})`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer",padding:"13px",width:"100%",boxShadow:"0 4px 16px rgba(196,30,58,0.25)",transition:"all .2s",display:"flex",alignItems:"center",justifyContent:"center",gap:8};
 
 // ─── Date Range Picker ────────────────────────────────────────────────────────
-function DateRangePicker({startDate,endDate,onChange}){
-  const [open,setOpen]=useState(false);
-  const [viewMonth,setViewMonth]=useState(new Date());
-  const [selecting,setSelecting]=useState(null); // "start"|"end"
-  const ref=useRef(null);
-
-  useEffect(()=>{
-    function handleClick(e){if(ref.current&&!ref.current.contains(e.target)){setOpen(false);setSelecting(null);}}
-    if(open)document.addEventListener("mousedown",handleClick);
-    return()=>document.removeEventListener("mousedown",handleClick);
-  },[open]);
-
+function CalendarDropdown({anchorEl,startDate,endDate,onChange,onClose}){
+  const [viewMonth,setViewMonth]=useState(startDate||new Date());
+  const [selecting,setSelecting]=useState(startDate&&!endDate?"end":"start");
   const days=["Su","Mo","Tu","We","Th","Fr","Sa"];
-  const monthNames=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
-  function getDaysInMonth(y,m){return new Date(y,m+1,0).getDate();}
-  function getFirstDay(y,m){return new Date(y,m,1).getDay();}
-
-  function handleDayClick(day){
-    const d=new Date(viewMonth.getFullYear(),viewMonth.getMonth(),day);
-    if(!selecting||selecting==="start"){
-      onChange({start:d,end:null});
-      setSelecting("end");
-    } else {
-      if(d<startDate){onChange({start:d,end:startDate});}
-      else{onChange({start:startDate,end:d});}
-      setSelecting(null);
-      setOpen(false);
+  const mNames=["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const y=viewMonth.getFullYear(),mo=viewMonth.getMonth();
+  const cells=[];
+  for(let i=0;i<new Date(y,mo,1).getDay();i++)cells.push(null);
+  for(let d=1;d<=new Date(y,mo+1,0).getDate();d++)cells.push(d);
+  function dayDate(d){return new Date(y,mo,d);}
+  function isStart(d){return startDate&&dayDate(d).toDateString()===startDate.toDateString();}
+  function isEnd(d){return endDate&&dayDate(d).toDateString()===endDate.toDateString();}
+  function isRange(d){const dd=dayDate(d);return startDate&&endDate&&dd>startDate&&dd<endDate;}
+  function click(d){
+    const dd=dayDate(d);
+    if(selecting==="start"){onChange({start:dd,end:null});setSelecting("end");}
+    else{
+      if(dd<startDate){onChange({start:dd,end:startDate});}
+      else{onChange({start:startDate,end:dd});}
+      onClose();
     }
   }
+  // position relative to anchor
+  const rect=anchorEl?anchorEl.getBoundingClientRect():{top:0,left:0,width:300};
+  const top=rect.bottom+window.scrollY+6;
+  const left=Math.min(rect.left+window.scrollX, window.innerWidth-320);
+  return(
+    <div style={{position:"absolute",top,left,width:310,background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:16,padding:16,boxShadow:"0 16px 48px rgba(0,0,0,0.2)",zIndex:99999}} onMouseDown={e=>e.stopPropagation()}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <button onClick={()=>setViewMonth(new Date(y,mo-1,1))} style={{background:"#f3f4f6",border:"none",cursor:"pointer",padding:"6px 10px",borderRadius:8,color:"#374151",fontWeight:700}}>&lt;</button>
+        <span style={{fontWeight:800,fontSize:14,color:"#1a1a2e"}}>{mNames[mo]} {y}</span>
+        <button onClick={()=>setViewMonth(new Date(y,mo+1,1))} style={{background:"#f3f4f6",border:"none",cursor:"pointer",padding:"6px 10px",borderRadius:8,color:"#374151",fontWeight:700}}>&gt;</button>
+      </div>
+      <p style={{fontSize:11,color:RED,textAlign:"center",marginBottom:10,fontWeight:600}}>{selecting==="start"?"👆 Select start date":"👆 Now select end date"}</p>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:4}}>
+        {days.map(d=><div key={d} style={{textAlign:"center",fontSize:11,fontWeight:700,color:"#9ca3af"}}>{d}</div>)}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
+        {cells.map((d,i)=>{
+          if(!d)return <div key={i}/>;
+          const s=isStart(d),e=isEnd(d),r=isRange(d);
+          return <button key={i} onClick={()=>click(d)} style={{padding:"7px 2px",borderRadius:7,border:"none",cursor:"pointer",fontSize:12,fontWeight:s||e?800:400,background:s||e?RED:r?"#fde8ea":"transparent",color:s||e?"#fff":r?RED:"#1a1a2e"}}>{d}</button>;
+        })}
+      </div>
+      <div style={{borderTop:"1px solid #f3f4f6",marginTop:12,paddingTop:12,display:"flex",gap:6,flexWrap:"wrap"}}>
+        {[["Today",0],["Last 7d",7],["Last 30d",30],["This month",-1]].map(([lbl,n])=>(
+          <button key={lbl} onClick={()=>{
+            const now=new Date(),e=new Date(now);
+            const s=n===-1?new Date(now.getFullYear(),now.getMonth(),1):n===0?new Date(now.getFullYear(),now.getMonth(),now.getDate()):new Date(now-n*86400000);
+            onChange({start:s,end:e});onClose();
+          }} style={{padding:"4px 10px",borderRadius:6,border:"1px solid #e5e7eb",background:"#f9fafb",fontSize:11,fontWeight:600,color:"#374151",cursor:"pointer"}}>{lbl}</button>
+        ))}
+      </div>
+      {startDate&&<button onClick={()=>{onChange({start:null,end:null});setSelecting("start");}} style={{marginTop:8,width:"100%",padding:"6px",border:"none",background:"none",color:"#9ca3af",fontSize:12,cursor:"pointer"}}>✕ Clear selection</button>}
+    </div>
+  );
+}
 
-  function isInRange(day){
-    const d=new Date(viewMonth.getFullYear(),viewMonth.getMonth(),day);
-    return startDate&&endDate&&d>=startDate&&d<=endDate;
-  }
-  function isStart(day){const d=new Date(viewMonth.getFullYear(),viewMonth.getMonth(),day);return startDate&&d.toDateString()===startDate.toDateString();}
-  function isEnd(day){const d=new Date(viewMonth.getFullYear(),viewMonth.getMonth(),day);return endDate&&d.toDateString()===endDate.toDateString();}
+function DateRangePicker({startDate,endDate,onChange}){
+  const [open,setOpen]=useState(false);
+  const btnRef=useRef(null);
+  const [,forceUpdate]=useState(0);
 
-  const y=viewMonth.getFullYear(),m=viewMonth.getMonth();
-  const totalDays=getDaysInMonth(y,m);
-  const firstDay=getFirstDay(y,m);
-  const cells=[];
-  for(let i=0;i<firstDay;i++)cells.push(null);
-  for(let d=1;d<=totalDays;d++)cells.push(d);
+  useEffect(()=>{
+    if(!open)return;
+    function onDown(e){
+      if(btnRef.current&&btnRef.current.contains(e.target))return;
+      setOpen(false);
+    }
+    document.addEventListener("mousedown",onDown);
+    return()=>document.removeEventListener("mousedown",onDown);
+  },[open]);
 
-  const label=startDate?`${fmtDate(startDate.toISOString())}${endDate?" → "+fmtDate(endDate.toISOString()):"…"}`:"Select date range";
+  // Re-render on scroll/resize to reposition
+  useEffect(()=>{
+    if(!open)return;
+    const h=()=>forceUpdate(n=>n+1);
+    window.addEventListener("scroll",h,true);
+    window.addEventListener("resize",h);
+    return()=>{window.removeEventListener("scroll",h,true);window.removeEventListener("resize",h);};
+  },[open]);
+
+  const label=startDate?`${fmtDate(startDate.toISOString())}${endDate?" → "+fmtDate(endDate.toISOString()):"  (select end…)"}`:"Select date range";
 
   return(
-    <div ref={ref} style={{position:"relative",zIndex:999}}>
-      <button onClick={()=>{setOpen(!open);setSelecting("start");}} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:"#fff",border:`1.5px solid ${open?RED:"#e5e7eb"}`,borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600,color:startDate?RED:"#6b7280",width:"100%",justifyContent:"space-between"}}>
+    <>
+      <button ref={btnRef} onClick={()=>setOpen(o=>!o)} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:"#fff",border:`1.5px solid ${open?RED:"#e5e7eb"}`,borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600,color:startDate?RED:"#6b7280",width:"100%",justifyContent:"space-between"}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}><Calendar size={15} color={startDate?RED:"#9ca3af"}/>{label}</div>
-        <ChevronDown size={14} color="#9ca3af"/>
+        <ChevronDown size={14} color={open?RED:"#9ca3af"} style={{transform:open?"rotate(180deg)":"none",transition:"transform .2s"}}/>
       </button>
-      {open&&(
-        <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,boxShadow:"0 8px 40px rgba(0,0,0,0.18)",minWidth:300,zIndex:9999}} onClick={e=>e.stopPropagation()}>
-          {/* Month nav */}
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-            <button onClick={()=>setViewMonth(new Date(y,m-1,1))} style={{background:"none",border:"none",cursor:"pointer",padding:4,borderRadius:6,color:"#6b7280"}}><ChevronLeft size={16}/></button>
-            <span style={{fontWeight:700,fontSize:14,color:"#1a1a2e"}}>{monthNames[m]} {y}</span>
-            <button onClick={()=>setViewMonth(new Date(y,m+1,1))} style={{background:"none",border:"none",cursor:"pointer",padding:4,borderRadius:6,color:"#6b7280"}}><ChevronRight size={16}/></button>
-          </div>
-          {/* Hint */}
-          <p style={{fontSize:11,color:"#9ca3af",textAlign:"center",marginBottom:8}}>{selecting==="end"?"Now click end date":"Click start date"}</p>
-          {/* Day headers */}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}}>
-            {days.map(d=><div key={d} style={{textAlign:"center",fontSize:11,fontWeight:700,color:"#9ca3af",padding:"2px 0"}}>{d}</div>)}
-          </div>
-          {/* Day cells */}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
-            {cells.map((d,i)=>{
-              if(!d)return <div key={i}/>;
-              const start=isStart(d),end=isEnd(d),inRange=isInRange(d);
-              return(
-                <button key={i} onClick={()=>handleDayClick(d)} style={{padding:"6px 2px",borderRadius:6,border:"none",cursor:"pointer",fontSize:12,fontWeight:start||end?800:500,background:start||end?RED:inRange?"#fde8ea":"transparent",color:start||end?"#fff":inRange?RED:"#1a1a2e",transition:"all .15s"}}>
-                  {d}
-                </button>
-              );
-            })}
-          </div>
-          {/* Quick presets */}
-          <div style={{borderTop:"1px solid #f3f4f6",marginTop:12,paddingTop:12,display:"flex",gap:6,flexWrap:"wrap"}}>
-            {[["Today",0,0],["Last 7 days",7,0],["Last 30 days",30,0],["This month","month","month"]].map(([label,from,to])=>(
-              <button key={label} onClick={()=>{
-                const now=new Date();
-                let s,e=new Date(now);
-                if(label==="This month"){s=new Date(now.getFullYear(),now.getMonth(),1);}
-                else if(label==="Today"){s=new Date(now.getFullYear(),now.getMonth(),now.getDate());}
-                else{s=new Date(now-from*86400000);}
-                onChange({start:s,end:e});setOpen(false);setSelecting(null);
-              }} style={{padding:"4px 10px",borderRadius:6,border:`1px solid #e5e7eb`,background:"#f9fafb",fontSize:11,fontWeight:600,color:"#374151",cursor:"pointer"}}>
-                {label}
-              </button>
-            ))}
-          </div>
-          {startDate&&<button onClick={()=>{onChange({start:null,end:null});setSelecting("start");}} style={{marginTop:8,width:"100%",padding:"6px",border:"none",background:"none",color:"#9ca3af",fontSize:12,cursor:"pointer"}}>✕ Clear</button>}
-        </div>
+      {open&&typeof document!=="undefined"&&ReactDOM.createPortal(
+        <CalendarDropdown anchorEl={btnRef.current} startDate={startDate} endDate={endDate} onChange={onChange} onClose={()=>setOpen(false)}/>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
 
@@ -256,11 +321,14 @@ function LoginScreen({onLogin}){
   const [empId,setEmpId]=useState("");
   const [empName,setEmpName]=useState("");
   const [mobile,setMobile]=useState("");
+  const [staffId,setStaffId]=useState("");
+  const [staffPass,setStaffPass]=useState("");
   const [adminUser,setAdminUser]=useState("");
   const [adminPass,setAdminPass]=useState("");
   const [err,setErr]=useState("");
   const [loading,setLoading]=useState(false);
   const [lookingUp,setLookingUp]=useState(false);
+  const [showPass,setShowPass]=useState(false);
 
   async function lookupEmp(id){
     if(id.trim().length<3){setEmpName("");return;}
@@ -275,10 +343,15 @@ function LoginScreen({onLogin}){
     setErr("");setLoading(true);
     try{
       if(mode==="admin"){
-        if(adminUser==="admin"&&adminPass==="admin123")onLogin({role:"admin",name:"Admin"});
+        const pwd=getAdminPassword();
+        if(adminUser==="admin"&&adminPass===pwd)onLogin({role:"admin",name:"Admin"});
         else setErr("Invalid admin credentials.");
-      }else{
-        if(!empName){setErr("Employee ID not found. Please check and try again.");setLoading(false);return;}
+      } else if(mode==="staff"){
+        const result=verifyStaff(staffId.trim(),staffPass);
+        if(result)onLogin(result);
+        else setErr("Invalid Employee ID or password.");
+      } else {
+        if(!empName){setErr("Employee ID not found.");setLoading(false);return;}
         if(mobile.length<10){setErr("Please enter a valid 10-digit mobile number.");setLoading(false);return;}
         const rows=await sbGet("employees",`employee_id=eq.${encodeURIComponent(empId.trim())}&is_active=eq.true`);
         if(rows.length>0)onLogin({role:"user",empId:rows[0].employee_id,emp_id:rows[0].employee_id,name:rows[0].name,department:rows[0].department,mobile});
@@ -288,56 +361,85 @@ function LoginScreen({onLogin}){
     setLoading(false);
   }
 
+  const MODES=[["user","Staff","🏥"],["staff","IT Team","🔧"],["admin","Admin","⚙️"]];
+
   return(
     <div className="login-shell" style={{minHeight:"100vh",width:"100%",background:"linear-gradient(135deg,#fff5f5 0%,#fff 50%,#fef2f2 100%)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
       <div style={{position:"fixed",top:0,left:0,right:0,height:5,background:`linear-gradient(90deg,${RED},${DARK})`}}/>
       <div className="fu" style={{width:"100%",maxWidth:420}}>
-        <div style={{textAlign:"center",marginBottom:32}}>
+        <div style={{textAlign:"center",marginBottom:28}}>
           <img src="/abmh-logo-1.png" alt="ABMH" style={{height:60,objectFit:"contain",marginBottom:16}}/>
           <h1 style={{color:"#1a1a2e",fontSize:22,fontWeight:800,letterSpacing:"-0.5px"}}>IT HelpDesk Portal</h1>
-          <p style={{color:"#6b7280",fontSize:13,marginTop:4}}>Raise & track IT complaints</p>
+          <p style={{color:"#6b7280",fontSize:13,marginTop:4}}>Aditya Birla Memorial Hospital</p>
         </div>
-        <div style={{display:"flex",background:"#f3f4f6",borderRadius:12,padding:4,marginBottom:24,border:"1px solid #e5e7eb"}}>
-          {[["user","Staff Login"],["admin","Admin Login"]].map(([v,l])=>(
-            <button key={v} onClick={()=>{setMode(v);setErr("");}} style={{flex:1,padding:"10px 0",borderRadius:9,border:"none",cursor:"pointer",fontWeight:700,fontSize:13,transition:"all .2s",background:mode===v?`linear-gradient(135deg,${RED},${DARK})`:"transparent",color:mode===v?"#fff":"#6b7280",boxShadow:mode===v?"0 2px 8px rgba(196,30,58,0.2)":"none"}}>{l}</button>
+        {/* 3-tab switcher */}
+        <div style={{display:"flex",background:"#f3f4f6",borderRadius:12,padding:4,marginBottom:24,border:"1px solid #e5e7eb",gap:4}}>
+          {MODES.map(([v,l,icon])=>(
+            <button key={v} onClick={()=>{setMode(v);setErr("");}} style={{flex:1,padding:"10px 0",borderRadius:9,border:"none",cursor:"pointer",fontWeight:700,fontSize:12,transition:"all .2s",background:mode===v?`linear-gradient(135deg,${RED},${DARK})`:"transparent",color:mode===v?"#fff":"#6b7280",boxShadow:mode===v?"0 2px 8px rgba(196,30,58,0.2)":"none"}}>
+              <span style={{display:"block",fontSize:16,marginBottom:2}}>{icon}</span>{l}
+            </button>
           ))}
         </div>
         <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:16,padding:24,boxShadow:"0 4px 24px rgba(0,0,0,0.06)"}}>
-          {mode==="user"?(
-            <>
-              <div style={{marginBottom:14}}>
-                <label style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:6,display:"block",textTransform:"uppercase",letterSpacing:"0.5px"}}>Employee ID</label>
-                <div style={{position:"relative"}}>
-                  <input style={INP} placeholder="e.g. 9662" value={empId} onChange={e=>{setEmpId(e.target.value);lookupEmp(e.target.value);}} onKeyDown={e=>e.key==="Enter"&&handleLogin()}/>
-                  {lookingUp&&<Loader size={14} color={RED} className="spin" style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)"}}/>}
-                </div>
-                {empName&&(
-                  <div style={{marginTop:8,background:LIGHT,border:`1px solid ${RED}30`,borderRadius:8,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
-                    <User size={14} color={RED}/><span style={{color:RED,fontSize:13,fontWeight:600}}>{empName}</span>
-                    <CheckCircle size={14} color="#16a34a" style={{marginLeft:"auto"}}/>
-                  </div>
-                )}
+          {mode==="user"&&(<>
+            <div style={{marginBottom:14}}>
+              <label style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:6,display:"block",textTransform:"uppercase",letterSpacing:"0.5px"}}>Employee ID</label>
+              <div style={{position:"relative"}}>
+                <input style={INP} placeholder="e.g. 9662" value={empId} onChange={e=>{setEmpId(e.target.value);lookupEmp(e.target.value);}} onKeyDown={e=>e.key==="Enter"&&handleLogin()}/>
+                {lookingUp&&<Loader size={14} color={RED} className="spin" style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)"}}/>}
               </div>
-              <div style={{marginBottom:20}}>
-                <label style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:6,display:"block",textTransform:"uppercase",letterSpacing:"0.5px"}}>Mobile Number</label>
-                <input style={INP} placeholder="10-digit mobile number" maxLength={10} value={mobile} onChange={e=>setMobile(e.target.value.replace(/\D/g,""))} onKeyDown={e=>e.key==="Enter"&&handleLogin()}/>
+              {empName&&(<div style={{marginTop:8,background:LIGHT,border:`1px solid ${RED}30`,borderRadius:8,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
+                <User size={14} color={RED}/><span style={{color:RED,fontSize:13,fontWeight:600}}>{empName}</span>
+                <CheckCircle size={14} color="#16a34a" style={{marginLeft:"auto"}}/>
+              </div>)}
+            </div>
+            <div style={{marginBottom:20}}>
+              <label style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:6,display:"block",textTransform:"uppercase",letterSpacing:"0.5px"}}>Mobile Number</label>
+              <input style={INP} placeholder="10-digit mobile number" maxLength={10} value={mobile} onChange={e=>setMobile(e.target.value.replace(/\D/g,""))} onKeyDown={e=>e.key==="Enter"&&handleLogin()}/>
+            </div>
+          </>)}
+
+          {mode==="staff"&&(<>
+            <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"10px 14px",marginBottom:16,display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:18}}>🔧</span>
+              <div>
+                <p style={{color:"#16a34a",fontSize:13,fontWeight:700}}>IT Team Login</p>
+                <p style={{color:"#6b7280",fontSize:11}}>L1 Support & L2 Technical staff</p>
               </div>
-            </>
-          ):(
-            <>
-              <div style={{marginBottom:14}}>
-                <label style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:6,display:"block",textTransform:"uppercase",letterSpacing:"0.5px"}}>Username</label>
-                <input style={INP} placeholder="admin" value={adminUser} onChange={e=>setAdminUser(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleLogin()}/>
+            </div>
+            <div style={{marginBottom:14}}>
+              <label style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:6,display:"block",textTransform:"uppercase",letterSpacing:"0.5px"}}>Employee ID</label>
+              <input style={INP} placeholder="Your Employee ID" value={staffId} onChange={e=>setStaffId(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleLogin()}/>
+            </div>
+            <div style={{marginBottom:20}}>
+              <label style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:6,display:"block",textTransform:"uppercase",letterSpacing:"0.5px"}}>Password</label>
+              <div style={{position:"relative"}}>
+                <input style={INP} type={showPass?"text":"password"} placeholder="••••••••" value={staffPass} onChange={e=>setStaffPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleLogin()}/>
+                <button onClick={()=>setShowPass(s=>!s)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#9ca3af",fontSize:12}}>{showPass?"Hide":"Show"}</button>
               </div>
-              <div style={{marginBottom:20}}>
-                <label style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:6,display:"block",textTransform:"uppercase",letterSpacing:"0.5px"}}>Password</label>
-                <input style={INP} type="password" placeholder="••••••••" value={adminPass} onChange={e=>setAdminPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleLogin()}/>
+            </div>
+          </>)}
+
+          {mode==="admin"&&(<>
+            <div style={{marginBottom:14}}>
+              <label style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:6,display:"block",textTransform:"uppercase",letterSpacing:"0.5px"}}>Username</label>
+              <input style={INP} placeholder="admin" value={adminUser} onChange={e=>setAdminUser(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleLogin()}/>
+            </div>
+            <div style={{marginBottom:20}}>
+              <label style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:6,display:"block",textTransform:"uppercase",letterSpacing:"0.5px"}}>Password</label>
+              <div style={{position:"relative"}}>
+                <input style={INP} type={showPass?"text":"password"} placeholder="••••••••" value={adminPass} onChange={e=>setAdminPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleLogin()}/>
+                <button onClick={()=>setShowPass(s=>!s)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#9ca3af",fontSize:12}}>{showPass?"Hide":"Show"}</button>
               </div>
-            </>
-          )}
+            </div>
+          </>)}
+
           {err&&<ErrBox msg={err}/>}
           <button onClick={handleLogin} disabled={loading} style={BTN}>
-            {loading?<><Loader size={16} className="spin"/>Verifying...</>:mode==="admin"?"Enter Dashboard →":"Login & Continue →"}
+            {loading?<><Loader size={16} className="spin"/>Verifying...</>:
+             mode==="admin"?"Enter Dashboard →":
+             mode==="staff"?"Enter Team View →":
+             "Login & Continue →"}
           </button>
         </div>
         <p style={{textAlign:"center",color:"#9ca3af",fontSize:12,marginTop:16}}>Aditya Birla Memorial Hospital · IT Department</p>
@@ -348,11 +450,10 @@ function LoginScreen({onLogin}){
 
 // ─── Raise Ticket ─────────────────────────────────────────────────────────────
 function RaiseTicket({user,slaConfig,onDone}){
-  const [mainCat,setMainCat]=useState("");         // software|hardware|network
-  const [subCat,setSubCat]=useState("");           // e.g. HIS / Desktop / WiFi
-  const [module,setModule]=useState("");           // leaf item
-  const [issueType,setIssueType]=useState(null);  // bug|cr|support
-  const [priority,setPriority]=useState("Medium");
+  const [mainCat,setMainCat]=useState("");
+  const [subCat,setSubCat]=useState("");
+  const [module,setModule]=useState("");
+  const [issueType,setIssueType]=useState(null);
   const [dept,setDept]=useState(user.department||"");
   const [desc,setDesc]=useState("");
   const [submitted,setSubmitted]=useState(null);
@@ -362,27 +463,26 @@ function RaiseTicket({user,slaConfig,onDone}){
   const catDef=mainCat?MAIN_CATEGORIES[mainCat]:null;
   const subKeys=catDef?Object.keys(catDef.children):[];
   const modules=subCat&&catDef?catDef.children[subCat]||[]:[];
+  const isSw=mainCat==="software";
+  const defaultPriority="Medium";
+  const canSubmit=mainCat&&subCat&&module&&dept&&desc.trim()&&!loading&&(isSw?!!issueType:true);
 
   async function submit(){
-    if(!mainCat||!subCat||!module||!issueType||!dept||!desc.trim())return;
+    if(!canSubmit)return;
     setLoading(true);setErr("");
     try{
-      const hrs=getSlaHours(slaConfig,mainCat,issueType,priority);
-      const assignedTo=catDef.assignTo;
+      const finalType=isSw?issueType:"support";
+      const hrs=getSlaHours(slaConfig,mainCat,finalType,defaultPriority);
       const ticket={
-        id:genId(),emp_id:user.empId,user_name:user.name,dept,
-        software:mainCat,           // reuse 'software' col for main category
-        category:subCat,            // subcategory
-        module,                     // leaf / specific issue
-        issue_type:issueType,       // bug|cr|support
-        priority,description:desc,
-        status:"Open",assigned_to:assignedTo,
-        raised_at:new Date().toISOString(),
+        id:genId(),emp_id:user.empId,user_name:user.name,mobile:user.mobile||"",dept,
+        software:mainCat,category:subCat,module,issue_type:finalType,
+        priority:defaultPriority,description:desc,status:"Open",
+        assigned_to:catDef.assignTo,raised_at:new Date().toISOString(),
         sla_deadline:new Date(Date.now()+hrs*3600000).toISOString(),note:""
       };
       const result=await sbPost("tickets",ticket);
       const saved=result[0]||ticket;
-      await sbPost("audit_log",{ticket_id:saved.id,action:"Ticket Created",changed_by:user.name,new_value:`Open — Assigned to ${assignedTo}`});
+      await sbPost("audit_log",{ticket_id:saved.id,action:"Ticket Created",changed_by:user.name,new_value:`Open — Assigned to ${catDef.assignTo}`});
       setSubmitted(saved);
     }catch(e){setErr("Failed to submit. Please try again.");}
     setLoading(false);
@@ -392,7 +492,7 @@ function RaiseTicket({user,slaConfig,onDone}){
     const cat=MAIN_CATEGORIES[submitted.software];
     return(
       <div className="fu" style={{padding:20}}>
-        <div style={{textAlign:"center",marginBottom:24}}>
+        <div style={{textAlign:"center",marginBottom:20}}>
           <div style={{width:60,height:60,borderRadius:"50%",background:"#f0fdf4",border:"2px solid #16a34a",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}>
             <CheckCircle size={30} color="#16a34a"/>
           </div>
@@ -400,17 +500,29 @@ function RaiseTicket({user,slaConfig,onDone}){
           <p style={{color:"#6b7280",fontSize:13,marginTop:4}}>Assigned to <strong>{submitted.assigned_to}</strong></p>
         </div>
         <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:16,padding:20,marginBottom:16,boxShadow:"0 2px 12px rgba(0,0,0,0.06)"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,paddingBottom:14,borderBottom:"1px solid #f3f4f6"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,paddingBottom:12,borderBottom:"1px solid #f3f4f6"}}>
             <span style={{color:RED,fontSize:15,fontWeight:800}}>{submitted.id}</span>
             <StatusBadge status="Open"/>
           </div>
-          {[["Category",cat?.label],["Sub-Category",submitted.category],["Issue",submitted.module],["Assigned To",submitted.assigned_to],["SLA Deadline",fmt(submitted.sla_deadline)],["Priority",submitted.priority]].map(([k,v])=>(
-            <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid #f9fafb"}}>
+          {[["Category",cat?.label],["Sub-Category",submitted.category],["Issue",submitted.module],["Department",submitted.dept],["Mobile",submitted.mobile||"—"],["Assigned To",submitted.assigned_to],["OLA Deadline",fmt(submitted.sla_deadline)]].map(([k,v])=>(
+            <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #f9fafb"}}>
               <span style={{color:"#6b7280",fontSize:13}}>{k}</span>
               <span style={{color:"#1a1a2e",fontSize:13,fontWeight:600}}>{v}</span>
             </div>
           ))}
-          <div style={{marginTop:12,background:LIGHT,border:`1px solid ${RED}20`,borderRadius:8,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
+          <div style={{marginTop:14,display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,padding:"12px",textAlign:"center"}}>
+              <p style={{color:"#0369a1",fontSize:11,fontWeight:700,marginBottom:4}}>⚡ Response Time</p>
+              <p style={{color:"#0369a1",fontSize:26,fontWeight:800,lineHeight:1}}>{getResponseTime(submitted.category)}h</p>
+              <p style={{color:"#93c5fd",fontSize:10,marginTop:4}}>guaranteed response</p>
+            </div>
+            <div style={{background:"#f9fafb",border:"1px solid #e5e7eb",borderRadius:10,padding:"12px",textAlign:"center"}}>
+              <p style={{color:"#6b7280",fontSize:11,fontWeight:700,marginBottom:4}}>✅ Resolution Time</p>
+              <p style={{color:"#9ca3af",fontSize:13,fontWeight:700,marginTop:6}}>Set by technician</p>
+              <p style={{color:"#d1d5db",fontSize:10,marginTop:4}}>after priority review</p>
+            </div>
+          </div>
+          <div style={{marginTop:10,background:LIGHT,borderRadius:8,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
             <Clock size={14} color={RED}/><span style={{color:RED,fontSize:13,fontWeight:600}}>{timeLeft(submitted.sla_deadline)}</span>
           </div>
         </div>
@@ -419,83 +531,82 @@ function RaiseTicket({user,slaConfig,onDone}){
     );
   }
 
-  const canSubmit=mainCat&&subCat&&module&&issueType&&dept&&desc.trim()&&!loading;
-
   return(
     <div style={{padding:20}}>
       <h2 className="fu" style={{color:"#1a1a2e",fontSize:20,fontWeight:800,marginBottom:4}}>Raise a Ticket</h2>
       <p className="fu1" style={{color:"#6b7280",fontSize:13,marginBottom:20}}>All fields are required</p>
 
-      {/* Step 1 — Main Category */}
       <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>1. Category</p>
       <div className="fu1" style={{display:"flex",gap:10,marginBottom:20}}>
         {Object.entries(MAIN_CATEGORIES).map(([key,cat])=>(
-          <button key={key} onClick={()=>{setMainCat(key);setSubCat("");setModule("");}} style={{flex:1,minWidth:0,padding:"12px 4px",borderRadius:12,border:`2px solid ${mainCat===key?cat.color:"#e5e7eb"}`,background:mainCat===key?cat.bg:"#fff",cursor:"pointer",transition:"all .2s",textAlign:"center"}}>
+          <button key={key} onClick={()=>{setMainCat(key);setSubCat("");setModule("");setIssueType(null);}} style={{flex:1,minWidth:0,padding:"12px 4px",borderRadius:12,border:`2px solid ${mainCat===key?cat.color:"#e5e7eb"}`,background:mainCat===key?cat.bg:"#fff",cursor:"pointer",transition:"all .2s",textAlign:"center"}}>
             <cat.icon size={20} color={mainCat===key?cat.color:"#9ca3af"} style={{margin:"0 auto 6px",display:"block"}}/>
-            <p style={{color:mainCat===key?cat.color:"#1a1a2e",fontWeight:800,fontSize:11,lineHeight:1.3,wordBreak:"break-word"}}>{cat.label}</p>
+            <p style={{color:mainCat===key?cat.color:"#1a1a2e",fontWeight:800,fontSize:11,lineHeight:1.3}}>{cat.label}</p>
           </button>
         ))}
       </div>
 
-      {/* Step 2 — Sub Category */}
-      {mainCat&&(
-        <>
-          <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>2. Sub-Category</p>
-          <div className="fu1" style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
-            {subKeys.map(sk=>(
-              <button key={sk} onClick={()=>{setSubCat(sk);setModule("");}} style={{padding:"11px 14px",borderRadius:10,border:`2px solid ${subCat===sk?catDef.color:"#e5e7eb"}`,background:subCat===sk?catDef.bg:"#fff",cursor:"pointer",textAlign:"left",fontWeight:600,fontSize:13,color:subCat===sk?catDef.color:"#374151",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                {sk}{subCat===sk&&<CheckCircle size={16} color={catDef.color}/>}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+      {mainCat&&(<>
+        <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>2. Sub-Category</p>
+        <div className="fu1" style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
+          {subKeys.map(sk=>(
+            <button key={sk} onClick={()=>{setSubCat(sk);setModule("");}} style={{padding:"11px 14px",borderRadius:10,border:`2px solid ${subCat===sk?catDef.color:"#e5e7eb"}`,background:subCat===sk?catDef.bg:"#fff",cursor:"pointer",textAlign:"left",fontWeight:600,fontSize:13,color:subCat===sk?catDef.color:"#374151",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              {sk}{subCat===sk&&<CheckCircle size={16} color={catDef.color}/>}
+            </button>
+          ))}
+        </div>
+      </>)}
 
-      {/* Step 3 — Specific Issue */}
-      {subCat&&(
-        <>
-          <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>3. Specific Issue</p>
-          <div className="fu2" style={{marginBottom:20}}>
-            <select style={SEL} value={module} onChange={e=>setModule(e.target.value)}>
-              <option value="">Select issue</option>
-              {modules.map(m=><option key={m} value={m}>{m}</option>)}
-            </select>
-          </div>
-        </>
-      )}
+      {subCat&&(<>
+        <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>3. Specific Issue</p>
+        <div className="fu2" style={{marginBottom:20}}>
+          <select style={SEL} value={module} onChange={e=>setModule(e.target.value)}>
+            <option value="">Select issue</option>
+            {modules.map(m=><option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+      </>)}
 
-      {/* Step 4 — Issue Type */}
-      {module&&(
-        <>
-          <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>4. Issue Type</p>
-          <div className="fu2" style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
-            {ISSUE_TYPES.map(it=>(
-              <button key={it.id} onClick={()=>setIssueType(it.id)} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:issueType===it.id?it.bg:"#fff",border:`2px solid ${issueType===it.id?it.color:"#e5e7eb"}`,borderRadius:12,cursor:"pointer",transition:"all .2s",textAlign:"left"}}>
+      {/* Issue Type — Software only */}
+      {module&&isSw&&(<>
+        <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>4. Issue Type</p>
+        <div className="fu2" style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
+          {ISSUE_TYPES.map(it=>{
+            return(
+              <button key={it.id} onClick={()=>setIssueType(it.id)} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:issueType===it.id?it.bg:"#fff",border:`2px solid ${issueType===it.id?it.color:"#e5e7eb"}`,borderRadius:12,cursor:"pointer",transition:"all .2s"}}>
                 <div style={{width:34,height:34,borderRadius:9,background:issueType===it.id?it.color+"20":"#f3f4f6",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                   <it.icon size={16} color={issueType===it.id?it.color:"#9ca3af"}/>
                 </div>
                 <div style={{flex:1}}>
                   <p style={{color:"#1a1a2e",fontWeight:700,fontSize:13}}>{it.label}</p>
-                  <p style={{color:it.color,fontSize:11,marginTop:1}}>SLA: {getSlaHours(slaConfig,mainCat,it.id,priority)}h ({priority})</p>
+                  <p style={{color:"#9ca3af",fontSize:11,marginTop:2}}>Response: {getResponseTime(subCat)}h · Resolution confirmed by technician</p>
                 </div>
                 {issueType===it.id&&<CheckCircle size={16} color={it.color}/>}
               </button>
-            ))}
-          </div>
-        </>
-      )}
+            );
+          })}
+        </div>
+      </>)}
 
-      {/* Step 5 — Details */}
-      {issueType&&(
-        <div className="fu3" style={{display:"flex",flexDirection:"column",gap:14}}>
-          <div>
-            <label style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:6,display:"block",textTransform:"uppercase",letterSpacing:"0.5px"}}>Priority</label>
-            <div style={{display:"flex",gap:8}}>
-              {PRIORITIES.map(p=>{const pc={Critical:RED,High:"#dc2626",Medium:"#d97706",Low:"#16a34a"};return(
-                <button key={p} onClick={()=>setPriority(p)} style={{flex:1,padding:"10px 4px",borderRadius:8,border:`2px solid ${priority===p?pc[p]:"#e5e7eb"}`,background:priority===p?pc[p]+"15":"#fff",color:priority===p?pc[p]:"#9ca3af",fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .2s"}}>{p}</button>
-              );})}
+      {/* OLA Response Time Preview — shown as soon as subCat selected, all categories */}
+      {subCat&&(
+        <div className="fu2" style={{marginBottom:20}}>
+          <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>Response Time Commitment</p>
+          <div style={{background:"#eff6ff",border:"1.5px solid #bfdbfe",borderRadius:12,padding:"16px",display:"flex",alignItems:"center",gap:14}}>
+            <div style={{width:48,height:48,borderRadius:"50%",background:"#0369a1",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <Clock size={22} color="#fff"/>
+            </div>
+            <div>
+              <p style={{color:"#0369a1",fontSize:13,fontWeight:700}}>Our team will respond within</p>
+              <p style={{color:"#0369a1",fontSize:32,fontWeight:800,lineHeight:1,marginTop:2}}>{getResponseTime(subCat)} hour{getResponseTime(subCat)!==1?"s":""}</p>
+              <p style={{color:"#93c5fd",fontSize:11,marginTop:4}}>Resolution time will be confirmed by technician based on priority</p>
             </div>
           </div>
+        </div>
+      )}
+
+      {module&&(isSw?issueType:true)&&(
+        <div className="fu3" style={{display:"flex",flexDirection:"column",gap:14}}>
           <div>
             <label style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:6,display:"block",textTransform:"uppercase",letterSpacing:"0.5px"}}>Department</label>
             <select style={SEL} value={dept} onChange={e=>setDept(e.target.value)}>
@@ -507,7 +618,6 @@ function RaiseTicket({user,slaConfig,onDone}){
             <label style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:6,display:"block",textTransform:"uppercase",letterSpacing:"0.5px"}}>Issue Description</label>
             <textarea style={{...INP,minHeight:100,resize:"vertical"}} placeholder="Describe the issue in detail..." value={desc} onChange={e=>setDesc(e.target.value)}/>
           </div>
-          {/* Assignment info */}
           {catDef&&(
             <div style={{background:catDef.bg,border:`1px solid ${catDef.color}30`,borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:8}}>
               <User size={14} color={catDef.color}/>
@@ -555,7 +665,7 @@ function MyTickets({empId}){
             const breached=isSlaBreached(t);
             return(
               <div key={t.id} className="si" style={{animationDelay:`${i*.04}s`,background:breached?"#fff5f5":"#fff",border:`1.5px solid ${breached?"#fca5a5":"#e5e7eb"}`,borderRadius:14,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
                   <span style={{color:RED,fontSize:13,fontWeight:800}}>{t.id}</span>
                   <StatusBadge status={t.status}/>
                 </div>
@@ -565,16 +675,292 @@ function MyTickets({empId}){
                   <span style={{background:"#f3f4f6",color:"#374151",fontSize:11,padding:"2px 8px",borderRadius:6,fontWeight:600}}>{t.category}</span>
                   <PriorityBadge priority={t.priority}/>
                 </div>
+                {/* Mobile number */}
+                {t.mobile&&<div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+                  <span style={{fontSize:12,color:"#6b7280"}}>📞</span>
+                  <a href={`tel:${t.mobile}`} style={{color:"#0369a1",fontSize:12,fontWeight:600,textDecoration:"none"}}>{t.mobile}</a>
+                </div>}
+                {/* OLA times */}
+                <div style={{display:"flex",gap:8,marginBottom:8,flexWrap:"wrap"}}>
+                  <span style={{background:"#eff6ff",color:"#0369a1",fontSize:11,padding:"3px 10px",borderRadius:6,fontWeight:600}}>⚡ Response: {getResponseTime(t.category)}h</span>
+                  {t.priority&&t.priority!=="Medium"?
+                    <span style={{background:"#f0fdf4",color:"#16a34a",fontSize:11,padding:"3px 10px",borderRadius:6,fontWeight:600}}>✅ Resolution: {getResolutionTime(t.software,t.priority)}h</span>
+                    :<span style={{background:"#f9fafb",color:"#9ca3af",fontSize:11,padding:"3px 10px",borderRadius:6,fontWeight:600}}>⏳ Resolution: pending technician</span>
+                  }
+                </div>
                 <div style={{display:"flex",justifyContent:"space-between"}}>
                   <span style={{color:"#9ca3af",fontSize:12}}>{fmt(t.raised_at)}</span>
                   <span style={{color:breached?RED:"#16a34a",fontSize:12,fontWeight:700}}>{timeLeft(t.sla_deadline)}</span>
                 </div>
-                {t.assigned_to&&<div style={{marginTop:8,fontSize:12,color:"#6b7280"}}>👤 {t.assigned_to}</div>}
+                {t.assigned_to&&<div style={{marginTop:6,fontSize:12,color:"#6b7280"}}>👤 {t.assigned_to}</div>}
               </div>
             );
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Staff View (L1 / L2 Technician) ─────────────────────────────────────────
+function TechnicianApp({user,onLogout}){
+  const [tickets,setTickets]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [selected,setSelected]=useState(null);
+  const [filter,setFilter]=useState("Open");
+  const [err,setErr]=useState("");
+  const teamCat=MAIN_CATEGORIES[user.team];
+
+  const load=useCallback(async()=>{
+    setLoading(true);
+    try{
+      // L1 sees unassigned OR tickets assigned to them; L2 sees tickets assigned to them
+      let q=`software=eq.${user.team}&order=raised_at.desc`;
+      const rows=await sbGet("tickets",q);
+      setTickets(rows);
+    }catch(e){setErr("Failed to load tickets.");}
+    setLoading(false);
+  },[user]);
+
+  useEffect(()=>{load();},[load]);
+
+  const filtered=tickets.filter(t=>{
+    if(filter==="All")return true;
+    return t.status===filter;
+  });
+
+  const myTickets=filtered.filter(t=>t.assigned_to===user.name);
+  const unassigned=filtered.filter(t=>!t.assigned_to||t.assigned_to==="");
+  const showTickets=user.level==="L1"?[...unassigned,...myTickets]:myTickets;
+
+  const breached=tickets.filter(t=>isSlaBreached(t)).length;
+  const open=tickets.filter(t=>t.status==="Open"||t.status==="In Progress").length;
+
+  if(selected){
+    return <TechTicketDetail ticketId={selected} tickets={tickets} user={user} onBack={()=>{setSelected(null);load();}} teamCat={teamCat}/>;
+  }
+
+  return(
+    <div style={{minHeight:"100vh",background:"#f5f6fa",maxWidth:480,margin:"0 auto",width:"100%"}}>
+      {/* Header */}
+      <div style={{background:"#fff",borderBottom:"1px solid #e5e7eb",boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
+        <div style={{height:4,background:`linear-gradient(90deg,${RED},${DARK})`}}/>
+        <div style={{padding:"12px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <p style={{color:"#1a1a2e",fontWeight:800,fontSize:15}}>{user.name}</p>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginTop:2}}>
+              <span style={{background:user.level==="L2"?LIGHT:"#f0fdf4",color:user.level==="L2"?RED:"#16a34a",fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:4,border:`1px solid ${user.level==="L2"?RED+"30":"#bbf7d0"}`}}>{user.level}</span>
+              {teamCat&&<span style={{background:teamCat.bg,color:teamCat.color,fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:4}}>{teamCat.label}</span>}
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <button onClick={load} style={{background:LIGHT,border:`1px solid ${RED}30`,borderRadius:8,padding:"6px 10px",cursor:"pointer",color:RED,fontSize:13,fontWeight:700}}>↻</button>
+            <button onClick={onLogout} style={{background:"#f3f4f6",border:"1px solid #e5e7eb",borderRadius:8,padding:"6px 10px",cursor:"pointer",color:"#6b7280",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><LogOut size={14}/>Out</button>
+          </div>
+        </div>
+        {/* Summary pills */}
+        <div style={{display:"flex",gap:8,padding:"0 20px 12px"}}>
+          {[["Open",open,"#d97706","#fffbeb"],["Breached",breached,RED,LIGHT],["Total",tickets.length,"#374151","#f9fafb"]].map(([l,v,c,bg])=>(
+            <div key={l} style={{background:bg,border:`1px solid ${c}20`,borderRadius:8,padding:"6px 12px",textAlign:"center",flex:1}}>
+              <p style={{color:c,fontSize:16,fontWeight:800,lineHeight:1}}>{v}</p>
+              <p style={{color:"#9ca3af",fontSize:10,marginTop:2}}>{l}</p>
+            </div>
+          ))}
+        </div>
+        {/* Status filter */}
+        <div style={{display:"flex",gap:6,padding:"0 20px 12px",overflowX:"auto"}}>
+          {["Open","In Progress","Resolved","All"].map(s=>(
+            <button key={s} onClick={()=>setFilter(s)} style={{padding:"6px 14px",borderRadius:20,border:`1.5px solid ${filter===s?RED:"#e5e7eb"}`,background:filter===s?LIGHT:"#fff",color:filter===s?RED:"#6b7280",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>{s}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Ticket list */}
+      <div style={{padding:"16px 16px 80px"}}>
+        {loading?<Spinner/>:err?<ErrBox msg={err}/>:showTickets.length===0?(
+          <div style={{textAlign:"center",padding:"48px 0"}}>
+            <CheckCircle size={40} color="#d1d5db" style={{margin:"0 auto 12px"}}/>
+            <p style={{color:"#9ca3af",fontSize:14}}>No {filter!=="All"?filter.toLowerCase():""} tickets</p>
+          </div>
+        ):(
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {showTickets.map((t,i)=>{
+              const breachedT=isSlaBreached(t);
+              const ismine=t.assigned_to===user.name;
+              return(
+                <div key={t.id} onClick={()=>setSelected(t.id)} className="si" style={{animationDelay:`${i*.04}s`,background:breachedT?"#fff5f5":"#fff",border:`1.5px solid ${breachedT?"#fca5a5":ismine?"#bfdbfe":"#e5e7eb"}`,borderRadius:14,padding:16,cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                    <span style={{color:RED,fontSize:12,fontWeight:800}}>{t.id}</span>
+                    <StatusBadge status={t.status}/>
+                  </div>
+                  {!ismine&&user.level==="L1"&&<div style={{background:"#fef9c3",border:"1px solid #fde047",borderRadius:6,padding:"3px 8px",marginBottom:6,display:"inline-block"}}><span style={{color:"#a16207",fontSize:11,fontWeight:700}}>⚡ Unassigned</span></div>}
+                  <p style={{color:"#1a1a2e",fontSize:13,fontWeight:500,marginBottom:8,lineHeight:1.4}}>{t.description?.substring(0,70)}{t.description?.length>70?"…":""}</p>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:6}}>
+                    <span style={{background:"#f3f4f6",color:"#374151",fontSize:11,padding:"2px 8px",borderRadius:6,fontWeight:600}}>{t.category}</span>
+                    <PriorityBadge priority={t.priority}/>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div>
+                      {t.mobile&&<a href={`tel:${t.mobile}`} onClick={e=>e.stopPropagation()} style={{color:"#0369a1",fontSize:12,fontWeight:600,textDecoration:"none"}}>📞 {t.mobile}</a>}
+                      <p style={{color:"#9ca3af",fontSize:11,marginTop:2}}>{t.user_name} · {t.dept}</p>
+                    </div>
+                    <span style={{color:breachedT?RED:"#16a34a",fontSize:11,fontWeight:700}}>{timeLeft(t.sla_deadline)}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Technician Ticket Detail ──────────────────────────────────────────────────
+function TechTicketDetail({ticketId,tickets,user,onBack,teamCat}){
+  const t=tickets.find(x=>x.id===ticketId);
+  const [saving,setSaving]=useState(false);
+  const [note,setNote]=useState(t?.note||"");
+  const [localT,setLocalT]=useState(t);
+
+  if(!localT){onBack();return null;}
+
+  async function updateField(field,value){
+    setSaving(true);
+    try{
+      const patch={[field]:value};
+      if(field==="status"&&value==="Resolved")patch.resolved_at=new Date().toISOString();
+      if(field==="status"&&value!=="Resolved")patch.resolved_at=null;
+      await sbPatch("tickets",`id=eq.${localT.id}`,patch);
+      await sbPost("audit_log",{ticket_id:localT.id,action:`${field} Updated`,changed_by:user.name,old_value:localT[field],new_value:value});
+      setLocalT(prev=>({...prev,...patch}));
+    }catch(e){alert("Failed to update.");}
+    setSaving(false);
+  }
+
+  async function acceptTicket(){
+    await updateField("assigned_to",user.name);
+  }
+
+  async function saveNote(){
+    setSaving(true);
+    try{
+      await sbPatch("tickets",`id=eq.${localT.id}`,{note});
+      setLocalT(prev=>({...prev,note}));
+    }catch(e){alert("Failed to save note.");}
+    setSaving(false);
+  }
+
+  async function escalateToL2(){
+    // Find L2 for this team
+    const l2=TEAM_CONFIG[localT.software]?.l2?.[0];
+    if(!l2)return;
+    await updateField("assigned_to",l2.name);
+    alert(`Ticket escalated to L2: ${l2.name}`);
+  }
+
+  const breachedT=isSlaBreached(localT);
+  const isAssignedToMe=localT.assigned_to===user.name;
+  const ola=getOlaTimes(localT.software,localT.priority);
+
+  return(
+    <div style={{minHeight:"100vh",background:"#f5f6fa",maxWidth:480,margin:"0 auto",paddingBottom:40}}>
+      <div style={{background:"#fff",borderBottom:"1px solid #e5e7eb",boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
+        <div style={{height:4,background:`linear-gradient(90deg,${RED},${DARK})`}}/>
+        <div style={{padding:"12px 20px",display:"flex",alignItems:"center",gap:12}}>
+          <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:"#6b7280",display:"flex",alignItems:"center",gap:4,fontSize:13,fontWeight:600,padding:0}}>
+            <ArrowLeft size={16}/>Back
+          </button>
+          <span style={{color:RED,fontWeight:800,fontSize:14,flex:1}}>{localT.id}</span>
+          <StatusBadge status={localT.status}/>
+        </div>
+      </div>
+
+      <div style={{padding:16,display:"flex",flexDirection:"column",gap:12}}>
+        {/* Accept / Escalate */}
+        {!isAssignedToMe&&(
+          <div style={{background:"#fef9c3",border:"1.5px solid #fde047",borderRadius:14,padding:14,display:"flex",gap:10}}>
+            <div style={{flex:1}}>
+              <p style={{color:"#a16207",fontWeight:700,fontSize:13}}>⚡ Unassigned Ticket</p>
+              <p style={{color:"#a16207",fontSize:12,marginTop:2}}>Take ownership to start working</p>
+            </div>
+            <button onClick={acceptTicket} disabled={saving} style={{background:"#16a34a",border:"none",borderRadius:10,color:"#fff",fontWeight:700,fontSize:13,padding:"10px 16px",cursor:"pointer"}}>Accept</button>
+          </div>
+        )}
+
+        {/* Breached alert */}
+        {breachedT&&<div style={{background:"#fff0f0",border:"1.5px solid #fca5a5",borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:8}}><AlertTriangle size={16} color={RED}/><span style={{color:RED,fontSize:13,fontWeight:700}}>OLA BREACHED — {timeLeft(localT.sla_deadline)}</span></div>}
+
+        {/* User info */}
+        <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+          <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:12,textTransform:"uppercase",letterSpacing:"0.5px"}}>Caller Details</p>
+          {[["Name",localT.user_name],["Department",localT.dept],["Mobile",localT.mobile||"—"],["Category",MAIN_CATEGORIES[localT.software]?.label],["Sub-Category",localT.category],["Issue",localT.module],["Raised At",fmt(localT.raised_at)]].map(([k,v])=>(
+            <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #f9fafb"}}>
+              <span style={{color:"#9ca3af",fontSize:13}}>{k}</span>
+              <span style={{color:k==="Mobile"?"#0369a1":"#1a1a2e",fontSize:13,fontWeight:600}}>{k==="Mobile"&&v!=="—"?<a href={`tel:${v}`} style={{color:"#0369a1",textDecoration:"none"}}>📞 {v}</a>:v}</span>
+            </div>
+          ))}
+          <p style={{color:"#1a1a2e",fontSize:13,lineHeight:1.5,marginTop:10,padding:"8px",background:"#f9fafb",borderRadius:8}}>{localT.description}</p>
+        </div>
+
+        {/* OLA Times */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:12,padding:"12px",textAlign:"center"}}>
+            <p style={{color:"#0369a1",fontSize:11,fontWeight:700,marginBottom:4}}>⚡ Response Time</p>
+            <p style={{color:"#0369a1",fontSize:22,fontWeight:800}}>{getResponseTime(localT.category)}h</p>
+          </div>
+          <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:12,padding:"12px",textAlign:"center"}}>
+            <p style={{color:"#16a34a",fontSize:11,fontWeight:700,marginBottom:4}}>✅ Resolution Time</p>
+            <p style={{color:"#16a34a",fontSize:22,fontWeight:800}}>{getResolutionTime(localT.software,localT.priority)}h</p>
+          </div>
+        </div>
+
+        {/* Priority — L2 only */}
+        {user.level==="L2"&&(
+          <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+            <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.5px"}}>Set Priority</p>
+            <p style={{color:"#9ca3af",fontSize:11,marginBottom:10}}>Sets resolution time commitment</p>
+            <div style={{display:"flex",gap:8}}>
+              {PRIORITIES.map(p=>{
+                const pc={Critical:RED,High:"#dc2626",Medium:"#d97706",Low:"#16a34a"};
+                return(
+                  <button key={p} onClick={()=>updateField("priority",p)} disabled={saving} style={{flex:1,padding:"8px 2px",borderRadius:8,border:`2px solid ${localT.priority===p?pc[p]:"#e5e7eb"}`,background:localT.priority===p?pc[p]+"15":"#fff",color:localT.priority===p?pc[p]:"#6b7280",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                    <p>{p}</p>
+                    <p style={{fontSize:9,marginTop:1,color:localT.priority===p?pc[p]:"#9ca3af"}}>{getResolutionTime(localT.software,p)}h</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Status update */}
+        <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+          <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:12,textTransform:"uppercase",letterSpacing:"0.5px"}}>Update Status</p>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {STATUSES.map(s=>(
+              <button key={s} onClick={()=>updateField("status",s)} disabled={saving} style={{padding:"8px 14px",borderRadius:8,border:`2px solid ${localT.status===s?RED:"#e5e7eb"}`,background:localT.status===s?LIGHT:"#fff",color:localT.status===s?RED:"#6b7280",fontSize:12,fontWeight:700,cursor:"pointer"}}>{s}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Escalate to L2 — L1 only */}
+        {user.level==="L1"&&isAssignedToMe&&localT.status!=="Resolved"&&(
+          <button onClick={escalateToL2} disabled={saving} style={{padding:"12px",borderRadius:12,border:`2px solid ${RED}`,background:LIGHT,color:RED,fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+            <AlertTriangle size={16}/>Escalate to L2 — {TEAM_CONFIG[localT.software]?.l2?.[0]?.name}
+          </button>
+        )}
+
+        {/* Note */}
+        <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+          <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>Work Notes</p>
+          {localT.note&&<p style={{color:"#374151",fontSize:13,marginBottom:10,padding:"8px",background:"#f0fdf4",borderRadius:8,borderLeft:"3px solid #16a34a"}}>{localT.note}</p>}
+          <textarea style={{...INP,minHeight:80,resize:"vertical"}} value={note} onChange={e=>setNote(e.target.value)} placeholder="Add work notes..."/>
+          <button onClick={saveNote} disabled={saving} style={{marginTop:8,padding:"9px 18px",background:LIGHT,border:`1.5px solid ${RED}`,borderRadius:8,color:RED,fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+            {saving?<><Loader size={14} className="spin"/>Saving...</>:<><Save size={14}/>Save Note</>}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -696,14 +1082,44 @@ function TicketDetail({ticketId,tickets,onBack,onUpdate}){
           <span style={{color:RED,fontSize:15,fontWeight:800}}>{t.id}</span>
           <StatusBadge status={t.status}/>
         </div>
-        {breachedT&&<div style={{background:"#fff0f0",border:"1px solid #fca5a5",borderRadius:8,padding:"8px 12px",marginBottom:12,display:"flex",alignItems:"center",gap:8}}><AlertTriangle size={14} color={RED}/><span style={{color:RED,fontSize:12,fontWeight:700}}>SLA BREACHED</span></div>}
+        {breachedT&&<div style={{background:"#fff0f0",border:"1px solid #fca5a5",borderRadius:8,padding:"8px 12px",marginBottom:12,display:"flex",alignItems:"center",gap:8}}><AlertTriangle size={14} color={RED}/><span style={{color:RED,fontSize:12,fontWeight:700}}>OLA BREACHED</span></div>}
         <p style={{color:"#1a1a2e",fontSize:14,lineHeight:1.6,marginBottom:16}}>{t.description}</p>
-        {[["Raised By",t.user_name],["Department",t.dept],["Category",cat?.label],["Sub-Category",t.category],["Issue",t.module],["Priority",t.priority],["Assigned To",t.assigned_to],["Raised At",fmt(t.raised_at)],["SLA Deadline",fmt(t.sla_deadline)],["SLA Status",timeLeft(t.sla_deadline)],["Resolved At",fmt(t.resolved_at)]].map(([k,v])=>(
+        {[["Raised By",t.user_name],["Mobile",t.mobile||"—"],["Department",t.dept],["Category",cat?.label],["Sub-Category",t.category],["Issue",t.module],["Priority",t.priority],["Assigned To",t.assigned_to],["Raised At",fmt(t.raised_at)],["OLA Deadline",fmt(t.sla_deadline)],["OLA Status",timeLeft(t.sla_deadline)],["Resolved At",fmt(t.resolved_at)]].map(([k,v])=>(
           <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid #f9fafb"}}>
             <span style={{color:"#6b7280",fontSize:13}}>{k}</span>
-            <span style={{color:k==="SLA Status"&&breachedT?RED:"#1a1a2e",fontSize:13,fontWeight:600}}>{v||"—"}</span>
+            <span style={{color:k==="OLA Status"&&breachedT?RED:"#1a1a2e",fontSize:13,fontWeight:600}}>{v||"—"}</span>
           </div>
         ))}
+      </div>
+
+      {/* Priority — set by technician */}
+      <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+        <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.5px"}}>Set Priority</p>
+        <p style={{color:"#9ca3af",fontSize:11,marginBottom:12}}>Technician confirms priority · OLA times update automatically</p>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+          {PRIORITIES.map(p=>{
+            const pc={Critical:RED,High:"#dc2626",Medium:"#d97706",Low:"#16a34a"};
+            return(
+              <button key={p} onClick={()=>updateField("priority",p)} disabled={saving} style={{flex:1,padding:"8px 4px",borderRadius:8,border:`2px solid ${t.priority===p?pc[p]:"#e5e7eb"}`,background:t.priority===p?pc[p]+"15":"#fff",color:t.priority===p?pc[p]:"#6b7280",fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .2s",minWidth:70}}>
+                <p>{p}</p>
+                <p style={{fontSize:10,fontWeight:500,marginTop:2,color:t.priority===p?pc[p]:"#9ca3af"}}>Res: {getResolutionTime(t.software,p)}h</p>
+              </button>
+            );
+          })}
+        </div>
+        {/* OLA display for current priority */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <div style={{background:"#eff6ff",borderRadius:8,padding:"10px",textAlign:"center"}}>
+            <p style={{color:"#0369a1",fontSize:10,fontWeight:700}}>⚡ Response Time</p>
+            <p style={{color:"#0369a1",fontSize:22,fontWeight:800}}>{getResponseTime(t.category)}h</p>
+            <p style={{color:"#93c5fd",fontSize:10,marginTop:2}}>based on sub-category</p>
+          </div>
+          <div style={{background:"#f0fdf4",borderRadius:8,padding:"10px",textAlign:"center"}}>
+            <p style={{color:"#16a34a",fontSize:10,fontWeight:700}}>✅ Resolution Time</p>
+            <p style={{color:"#16a34a",fontSize:22,fontWeight:800}}>{getResolutionTime(t.software,t.priority)}h</p>
+            <p style={{color:"#86efac",fontSize:10,marginTop:2}}>based on {t.priority} priority</p>
+          </div>
+        </div>
       </div>
 
       {/* Reassign */}
@@ -814,9 +1230,9 @@ function Reports({tickets}){
     const rows=[
       ["ABMH IT HelpDesk Report"],
       [`Period: ${dateRange.start?fmtDate(dateRange.start.toISOString()):"All"} to ${dateRange.end?fmtDate(dateRange.end.toISOString()):"Today"}`],
-      [`Total: ${total} | Resolved: ${resolved} | SLA Compliance: ${slaCompliance}% | Avg Resolution: ${avgRes}h`],
+      [`Total: ${total} | Resolved: ${resolved} | OLA Compliance: ${slaCompliance}% | Avg Resolution: ${avgRes}h`],
       [],
-      ["Ticket ID","Raised By","Dept","Category","Sub-Category","Issue","Priority","Status","Assigned To","Raised At","SLA Deadline","Resolved At","Within TAT"],
+      ["Ticket ID","Raised By","Dept","Category","Sub-Category","Issue","Priority","Status","Assigned To","Raised At","OLA Deadline","Resolved At","Within OLA"],
       ...filtered.map(t=>[t.id,t.user_name,t.dept,MAIN_CATEGORIES[t.software]?.label||t.software,t.category,t.module,t.priority,t.status,t.assigned_to||"—",fmt(t.raised_at),fmt(t.sla_deadline),fmt(t.resolved_at),(!t.resolved_at||new Date(t.resolved_at)<=new Date(t.sla_deadline))?"Yes":"No"])
     ];
     const csv=rows.map(r=>Array.isArray(r)?r.map(c=>`"${String(c||"").replace(/"/g,'""')}"`).join(","):r).join("\n");
@@ -842,16 +1258,16 @@ function Reports({tickets}){
       <div class="summary">
         <div class="card"><div class="num">${total}</div><div class="lbl">Total Tickets</div></div>
         <div class="card"><div class="num">${resolved}</div><div class="lbl">Resolved</div></div>
-        <div class="card"><div class="num" style="color:${complianceColor(slaCompliance)}">${slaCompliance}%</div><div class="lbl">SLA Compliance</div></div>
+        <div class="card"><div class="num" style="color:${complianceColor(slaCompliance)}">${slaCompliance}%</div><div class="lbl">OLA Compliance</div></div>
         <div class="card"><div class="num">${avgRes}h</div><div class="lbl">Avg Resolution</div></div>
-        <div class="card"><div class="num" style="color:#dc2626">${breached}</div><div class="lbl">SLA Breached</div></div>
+        <div class="card"><div class="num" style="color:#dc2626">${breached}</div><div class="lbl">OLA Breached</div></div>
       </div>
       <h2 style="color:#374151;font-size:14px;margin:16px 0 8px">Team Performance</h2>
-      <table><tr><th>Assignee</th><th>Total</th><th>Resolved</th><th>Within TAT</th><th>SLA %</th></tr>
+      <table><tr><th>Assignee</th><th>Total</th><th>Resolved</th><th>Within OLA</th><th>SLA %</th></tr>
         ${byAssignee.map(a=>`<tr><td>${a.name}</td><td>${a.total}</td><td>${a.resolved}</td><td>${a.inTat}</td><td class="${a.compliance>=90?"green":a.compliance>=70?"orange":"red"}">${a.compliance}%</td></tr>`).join("")}
       </table>
       <h2 style="color:#374151;font-size:14px;margin:16px 0 8px">All Tickets</h2>
-      <table><tr><th>Ticket ID</th><th>Raised By</th><th>Category</th><th>Sub-Cat</th><th>Priority</th><th>Status</th><th>Assigned To</th><th>Within TAT</th></tr>
+      <table><tr><th>Ticket ID</th><th>Raised By</th><th>Category</th><th>Sub-Cat</th><th>Priority</th><th>Status</th><th>Assigned To</th><th>Within OLA</th></tr>
         ${filtered.map(t=>`<tr><td>${t.id}</td><td>${t.user_name}</td><td>${MAIN_CATEGORIES[t.software]?.label||t.software}</td><td>${t.category}</td><td>${t.priority}</td><td>${t.status}</td><td>${t.assigned_to||"—"}</td><td>${(!t.resolved_at||new Date(t.resolved_at)<=new Date(t.sla_deadline))?"✅ Yes":"❌ No"}</td></tr>`).join("")}
       </table>
     </body></html>`;
@@ -861,7 +1277,7 @@ function Reports({tickets}){
   return(
     <div style={{padding:20}}>
       <h2 className="fu" style={{color:"#1a1a2e",fontSize:20,fontWeight:800,marginBottom:4}}>Reports & Analytics</h2>
-      <p className="fu1" style={{color:"#6b7280",fontSize:13,marginBottom:16}}>SLA compliance, TAT and performance metrics</p>
+      <p className="fu1" style={{color:"#6b7280",fontSize:13,marginBottom:16}}>OLA compliance, Response & Resolution time metrics</p>
 
       {/* Date Range Picker */}
       <div className="fu1" style={{marginBottom:20}}>
@@ -874,10 +1290,10 @@ function Reports({tickets}){
         {[
           {label:"Total Tickets",val:total,color:RED},
           {label:"Resolved",val:resolved,color:"#16a34a"},
-          {label:"SLA Compliance",val:`${slaCompliance}%`,color:complianceColor(slaCompliance)},
+          {label:"OLA Compliance",val:`${slaCompliance}%`,color:complianceColor(slaCompliance)},
           {label:"Avg Resolution",val:`${avgRes}h`,color:"#0369a1"},
-          {label:"Within TAT",val:resolvedInTat,color:"#16a34a"},
-          {label:"SLA Breached",val:breached,color:"#dc2626"},
+          {label:"Within OLA",val:resolvedInTat,color:"#16a34a"},
+          {label:"OLA Breached",val:breached,color:"#dc2626"},
         ].map((s,i)=>(
           <div key={s.label} className="fu" style={{animationDelay:`${i*.05}s`,background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:"14px 16px",boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
             <p style={{color:s.color,fontSize:22,fontWeight:800,lineHeight:1}}>{s.val}</p>
@@ -897,13 +1313,13 @@ function Reports({tickets}){
         </div>
         <div style={{display:"flex",justifyContent:"space-between",marginTop:8}}>
           <span style={{color:"#9ca3af",fontSize:11}}>{resolved} of {total} tickets resolved</span>
-          <span style={{color:complianceColor(slaCompliance),fontSize:11,fontWeight:700}}>{slaCompliance}% within SLA</span>
+          <span style={{color:complianceColor(slaCompliance),fontSize:11,fontWeight:700}}>{slaCompliance}% within OLA</span>
         </div>
       </div>
 
       {/* By Category */}
       <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
-        <p style={{color:"#1a1a2e",fontWeight:700,fontSize:14,marginBottom:14}}>By Category — SLA Compliance</p>
+        <p style={{color:"#1a1a2e",fontWeight:700,fontSize:14,marginBottom:14}}>By Category — OLA Compliance</p>
         {byCat.map(c=>(
           <div key={c.key} style={{marginBottom:14}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
@@ -918,7 +1334,7 @@ function Reports({tickets}){
             </div>
             <div style={{display:"flex",gap:12,marginTop:4}}>
               <span style={{color:"#9ca3af",fontSize:11}}>Resolved: {c.resolved}</span>
-              <span style={{color:"#16a34a",fontSize:11}}>Within TAT: {c.inTat}</span>
+              <span style={{color:"#16a34a",fontSize:11}}>Within OLA: {c.inTat}</span>
             </div>
           </div>
         ))}
@@ -936,7 +1352,7 @@ function Reports({tickets}){
                 </div>
                 <span style={{fontWeight:700,fontSize:13,color:"#1a1a2e"}}>{a.name}</span>
               </div>
-              <span style={{color:complianceColor(a.compliance),fontWeight:800,fontSize:14}}>{a.compliance}% SLA</span>
+              <span style={{color:complianceColor(a.compliance),fontWeight:800,fontSize:14}}>{a.compliance}% OLA</span>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
               {[["Total",a.total,"#374151"],["Resolved",a.resolved,"#16a34a"],["In TAT",a.inTat,"#0369a1"]].map(([l,v,c])=>(
@@ -955,7 +1371,7 @@ function Reports({tickets}){
 
       {/* Priority breakdown */}
       <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
-        <p style={{color:"#1a1a2e",fontWeight:700,fontSize:14,marginBottom:14}}>By Priority — TAT Compliance</p>
+        <p style={{color:"#1a1a2e",fontWeight:700,fontSize:14,marginBottom:14}}>By Priority — OLA Compliance</p>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           {byPriority.map(p=>{
             const pc={Critical:RED,High:"#dc2626",Medium:"#d97706",Low:"#16a34a"};
@@ -967,7 +1383,7 @@ function Reports({tickets}){
                 <div style={{marginTop:8,height:5,background:"#e5e7eb",borderRadius:3,overflow:"hidden"}}>
                   <div style={{width:`${p.compliance}%`,height:"100%",background:complianceColor(p.compliance),borderRadius:3}}/>
                 </div>
-                <p style={{color:complianceColor(p.compliance),fontSize:11,fontWeight:700,marginTop:4}}>{p.compliance}% within SLA</p>
+                <p style={{color:complianceColor(p.compliance),fontSize:11,fontWeight:700,marginTop:4}}>{p.compliance}% within OLA</p>
               </div>
             );
           })}
@@ -1000,7 +1416,8 @@ function Reports({tickets}){
                   </div>
                   <div style={{textAlign:"right"}}>
                     <StatusBadge status={t.status}/>
-                    <p style={{color:met?"#16a34a":"#dc2626",fontSize:11,fontWeight:600,marginTop:4}}>{met?"✓ Within TAT":"✗ Breached"}</p>
+                    <p style={{color:met?"#16a34a":"#dc2626",fontSize:11,fontWeight:600,marginTop:4}}>{met?"✓ Within OLA":"✗ Breached"}</p>
+                    {t.mobile&&<a href={`tel:${t.mobile}`} style={{color:"#0369a1",fontSize:11,fontWeight:600,textDecoration:"none",display:"block",marginTop:2}}>📞 {t.mobile}</a>}
                   </div>
                 </div>
               );
@@ -1036,8 +1453,8 @@ function SlaSettings({slaConfig,onUpdate}){
 
   return(
     <div style={{padding:20}}>
-      <h2 className="fu" style={{color:"#1a1a2e",fontSize:20,fontWeight:800,marginBottom:4}}>SLA Configuration</h2>
-      <p className="fu1" style={{color:"#6b7280",fontSize:13,marginBottom:20}}>Priority-based resolution times (hours)</p>
+      <h2 className="fu" style={{color:"#1a1a2e",fontSize:20,fontWeight:800,marginBottom:4}}>OLA Configuration</h2>
+      <p className="fu1" style={{color:"#6b7280",fontSize:13,marginBottom:20}}>Response & Resolution times per category (hours)</p>
       {!editMode?(
         <>
           {Object.entries(MAIN_CATEGORIES).map(([key,cat])=>(
@@ -1082,6 +1499,124 @@ function SlaSettings({slaConfig,onUpdate}){
   );
 }
 
+// ─── Password Manager ─────────────────────────────────────────────────────────
+function PasswordManager(){
+  const [passwords,setPasswords]=useState(getStaffPasswords());
+  const [adminPwd,setAdminPwd]=useState(getAdminPassword());
+  const [editing,setEditing]=useState(null); // empId or "admin"
+  const [newPwd,setNewPwd]=useState("");
+  const [show,setShow]=useState({});
+  const [saved,setSaved]=useState("");
+
+  const allStaff=getAllStaff();
+
+  function saveChange(){
+    if(!newPwd||newPwd.length<4){alert("Password must be at least 4 characters.");return;}
+    if(editing==="admin"){
+      saveAdminPassword(newPwd);
+      setAdminPwd(newPwd);
+    } else {
+      const updated={...passwords,[editing]:newPwd};
+      saveStaffPasswords(updated);
+      setPasswords(updated);
+    }
+    setSaved(editing);
+    setEditing(null);setNewPwd("");
+    setTimeout(()=>setSaved(""),3000);
+  }
+
+  const LEVEL_COLOR={L1:"#16a34a",L2:RED};
+  const TEAM_LABEL={software:"Software",hardware:"Hardware & Ops",network:"Network"};
+
+  return(
+    <div style={{padding:20,maxWidth:600,margin:"0 auto"}}>
+      <h2 style={{color:"#1a1a2e",fontSize:18,fontWeight:800,marginBottom:4}}>Password Management</h2>
+      <p style={{color:"#6b7280",fontSize:13,marginBottom:20}}>Change passwords for all IT staff and admin. Passwords are stored locally on this device.</p>
+
+      {saved&&<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"10px 14px",marginBottom:16,color:"#16a34a",fontWeight:600,fontSize:13}}>✅ Password updated successfully!</div>}
+
+      {/* Admin password */}
+      <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,marginBottom:12,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:38,height:38,borderRadius:10,background:LIGHT,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <Settings size={18} color={RED}/>
+            </div>
+            <div>
+              <p style={{color:"#1a1a2e",fontWeight:700,fontSize:14}}>Admin</p>
+              <p style={{color:"#9ca3af",fontSize:12}}>Full dashboard access</p>
+            </div>
+          </div>
+          <button onClick={()=>{setEditing("admin");setNewPwd("");}} style={{padding:"7px 14px",borderRadius:8,border:`1.5px solid ${RED}`,background:LIGHT,color:RED,fontSize:12,fontWeight:700,cursor:"pointer"}}>Change</button>
+        </div>
+        {editing==="admin"&&(
+          <div style={{marginTop:12,display:"flex",gap:8}}>
+            <div style={{flex:1,position:"relative"}}>
+              <input style={{...INP,paddingRight:60}} type={show["admin"]?"text":"password"} placeholder="New password" value={newPwd} onChange={e=>setNewPwd(e.target.value)} onKeyDown={e=>e.key==="Enter"&&saveChange()}/>
+              <button onClick={()=>setShow(s=>({...s,admin:!s.admin}))} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#9ca3af",fontSize:11}}>{show["admin"]?"Hide":"Show"}</button>
+            </div>
+            <button onClick={saveChange} style={{padding:"0 16px",borderRadius:8,background:RED,border:"none",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>Save</button>
+            <button onClick={()=>{setEditing(null);setNewPwd("");}} style={{padding:"0 12px",borderRadius:8,background:"#f3f4f6",border:"none",color:"#6b7280",cursor:"pointer",fontSize:13}}>✕</button>
+          </div>
+        )}
+      </div>
+
+      {/* Group staff by team */}
+      {Object.entries(TEAM_CONFIG).map(([team,cfg])=>(
+        <div key={team} style={{marginBottom:16}}>
+          <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>{TEAM_LABEL[team]}</p>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {[...cfg.l1.map(s=>({...s,level:"L1"})),...cfg.l2.map(s=>({...s,level:"L2"}))].map(staff=>{
+              const currentPwd=passwords[staff.id]||staff.password;
+              return(
+                <div key={staff.id} style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:12,padding:14,boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <div style={{width:36,height:36,borderRadius:10,background:staff.level==="L2"?LIGHT:"#f0fdf4",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                        <User size={16} color={LEVEL_COLOR[staff.level]}/>
+                      </div>
+                      <div>
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <p style={{color:"#1a1a2e",fontWeight:700,fontSize:13}}>{staff.name}</p>
+                          <span style={{background:staff.level==="L2"?LIGHT:"#f0fdf4",color:LEVEL_COLOR[staff.level],fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:4,border:`1px solid ${LEVEL_COLOR[staff.level]}30`}}>{staff.level}</span>
+                        </div>
+                        <p style={{color:"#9ca3af",fontSize:11}}>ID: {staff.id}</p>
+                      </div>
+                    </div>
+                    <button onClick={()=>{setEditing(staff.id);setNewPwd("");}} style={{padding:"6px 12px",borderRadius:8,border:`1.5px solid ${LEVEL_COLOR[staff.level]}`,background:staff.level==="L2"?LIGHT:"#f0fdf4",color:LEVEL_COLOR[staff.level],fontSize:12,fontWeight:700,cursor:"pointer"}}>Change</button>
+                  </div>
+                  {editing===staff.id&&(
+                    <div style={{marginTop:10,display:"flex",gap:8}}>
+                      <div style={{flex:1,position:"relative"}}>
+                        <input style={{...INP,paddingRight:60}} type={show[staff.id]?"text":"password"} placeholder="New password" value={newPwd} onChange={e=>setNewPwd(e.target.value)} onKeyDown={e=>e.key==="Enter"&&saveChange()}/>
+                        <button onClick={()=>setShow(s=>({...s,[staff.id]:!s[staff.id]}))} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#9ca3af",fontSize:11}}>{show[staff.id]?"Hide":"Show"}</button>
+                      </div>
+                      <button onClick={saveChange} style={{padding:"0 14px",borderRadius:8,background:RED,border:"none",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>Save</button>
+                      <button onClick={()=>{setEditing(null);setNewPwd("");}} style={{padding:"0 10px",borderRadius:8,background:"#f3f4f6",border:"none",color:"#6b7280",cursor:"pointer",fontSize:13}}>✕</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
+      {/* L3/L4 info — read only */}
+      <div style={{background:"#f9fafb",border:"1px dashed #e5e7eb",borderRadius:12,padding:14,marginTop:8}}>
+        <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>Escalation Chain (View Only)</p>
+        {[["L3",TEAM_CONFIG.software.l3],["L4",TEAM_CONFIG.software.l4]].map(([lvl,name])=>(
+          <div key={lvl} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",borderBottom:"1px solid #f3f4f6"}}>
+            <span style={{background:"#f3f4f6",color:"#374151",fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:4,minWidth:28,textAlign:"center"}}>{lvl}</span>
+            <span style={{color:"#374151",fontSize:13,fontWeight:600}}>{name}</span>
+            <span style={{color:"#9ca3af",fontSize:11,marginLeft:"auto"}}>No portal login</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Admin App ────────────────────────────────────────────────────────────────
 function AdminApp({onLogout}){
   const [tab,setTab]=useState("dashboard");
@@ -1119,7 +1654,7 @@ function AdminApp({onLogout}){
     (!search||t.id.toLowerCase().includes(search.toLowerCase())||t.user_name?.toLowerCase().includes(search.toLowerCase())||t.description?.toLowerCase().includes(search.toLowerCase()))
   );
 
-  const NAV=[["dashboard",LayoutDashboard,"Dashboard"],["tickets",FileText,"Tickets"],["reports",BarChart2,"Reports"],["sla",Settings,"SLA"]];
+  const NAV=[["dashboard",LayoutDashboard,"Dashboard"],["tickets",FileText,"Tickets"],["reports",BarChart2,"Reports"],["sla",Settings,"OLA"],["passwords",User,"Passwords"]];
 
   // Sidebar for desktop
   const Sidebar=()=>(
@@ -1169,7 +1704,7 @@ function AdminApp({onLogout}){
             <img src="/abmh-logo-1.png" alt="ABMH" style={{height:32,objectFit:"contain"}}/>
             <div style={{textAlign:"center"}}>
               <p style={{color:"#1a1a2e",fontWeight:700,fontSize:13,lineHeight:1}}>Admin Dashboard</p>
-              {breached>0&&<p style={{color:RED,fontSize:11,marginTop:2}}>{breached} SLA breach{breached>1?"es":""}</p>}
+              {breached>0&&<p style={{color:RED,fontSize:11,marginTop:2}}>{breached} OLA breach{breached>1?"es":""}</p>}
             </div>
             <div style={{display:"flex",gap:8}}>
               <button onClick={load} style={{background:LIGHT,border:`1px solid ${RED}30`,borderRadius:8,padding:"6px 10px",cursor:"pointer",color:RED,fontSize:13,fontWeight:700}}>↻</button>
@@ -1184,7 +1719,7 @@ function AdminApp({onLogout}){
               {tab==="dashboard"&&(
                 <div style={{padding:20}}>
                   <div className="fu" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
-                    {[{label:"Total",val:total,color:RED,icon:Ticket},{label:"Open",val:open,color:"#d97706",icon:Bell},{label:"Resolved",val:resolved,color:"#16a34a",icon:CheckCircle},{label:"SLA Breached",val:breached,color:"#dc2626",icon:AlertTriangle}].map((s,i)=>(
+                    {[{label:"Total",val:total,color:RED,icon:Ticket},{label:"Open",val:open,color:"#d97706",icon:Bell},{label:"Resolved",val:resolved,color:"#16a34a",icon:CheckCircle},{label:"OLA Breached",val:breached,color:"#dc2626",icon:AlertTriangle}].map((s,i)=>(
                       <div key={s.label} className="fu" style={{animationDelay:`${i*.06}s`,background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
                         <div style={{width:38,height:38,borderRadius:10,background:`${s.color}12`,display:"flex",alignItems:"center",justifyContent:"center"}}><s.icon size={18} color={s.color}/></div>
                         <div><p style={{color:s.color,fontSize:22,fontWeight:800,lineHeight:1}}>{s.val}</p><p style={{color:"#6b7280",fontSize:12,marginTop:3}}>{s.label}</p></div>
@@ -1204,12 +1739,12 @@ function AdminApp({onLogout}){
                       );
                     })}
                   </div>
-                  {/* SLA breached */}
+                  {/* OLA breached */}
                   {breached>0&&(
                     <div className="fu3" style={{background:"#fff5f5",border:"1.5px solid #fca5a5",borderRadius:14,padding:16,marginBottom:20}}>
                       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
                         <AlertTriangle size={16} color={RED}/>
-                        <p style={{color:RED,fontWeight:700,fontSize:14}}>SLA Breached Tickets</p>
+                        <p style={{color:RED,fontWeight:700,fontSize:14}}>OLA Breached Tickets</p>
                       </div>
                       {tickets.filter(t=>isSlaBreached(t)).map(t=>(
                         <div key={t.id} onClick={()=>setSelected(t.id)} style={{background:"#fff",borderRadius:10,padding:"10px 12px",marginBottom:8,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",border:"1px solid #fca5a5"}}>
@@ -1289,6 +1824,7 @@ function AdminApp({onLogout}){
 
               {tab==="reports"&&<Reports tickets={tickets}/>}
               {tab==="sla"&&<SlaSettings slaConfig={slaConfig} onUpdate={setSlaConfig}/>}
+              {tab==="passwords"&&<PasswordManager/>}
             </div>
           )}
         </div>
@@ -1322,5 +1858,7 @@ export default function App(){
     ?<LoginScreen onLogin={setUser}/>
     :user.role==="admin"
       ?<AdminApp onLogout={()=>setUser(null)}/>
-      :<UserApp user={user} slaConfig={slaConfig} onLogout={()=>setUser(null)}/>;
+      :user.role==="staff"
+        ?<TechnicianApp user={user} onLogout={()=>setUser(null)}/>
+        :<UserApp user={user} slaConfig={slaConfig} onLogout={()=>setUser(null)}/>;
 }
