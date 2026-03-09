@@ -1005,7 +1005,7 @@ function MyTickets({empId}){
                 {/* OLA times */}
                 <div style={{display:"flex",gap:8,marginBottom:8,flexWrap:"wrap"}}>
                   <span style={{background:"#eff6ff",color:"#0369a1",fontSize:11,padding:"3px 10px",borderRadius:6,fontWeight:600}}>⚡ Response: {getResponseTime(t.category)}h</span>
-                  {t.priority&&t.priority!=="Medium"?
+                  {t.priority?
                     <span style={{background:"#f0fdf4",color:"#16a34a",fontSize:11,padding:"3px 10px",borderRadius:6,fontWeight:600}}>✅ Resolution: {getResolutionTime(t.software,t.priority)}h</span>
                     :<span style={{background:"#f9fafb",color:"#9ca3af",fontSize:11,padding:"3px 10px",borderRadius:6,fontWeight:600}}>⏳ Resolution: pending technician</span>
                   }
@@ -1236,8 +1236,8 @@ function TechTicketDetail({ticketId,tickets,user,onBack,teamCat}){
           </div>
         </div>
 
-        {/* Priority — L2 only */}
-        {user.level==="L2"&&(
+        {/* Priority — all technicians */}
+        {(
           <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
             <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.5px"}}>Set Priority</p>
             <p style={{color:"#9ca3af",fontSize:11,marginBottom:10}}>Sets resolution time commitment</p>
@@ -1885,12 +1885,62 @@ function SlaSettings({slaConfig,onUpdate}){
 function PasswordManager(){
   const [passwords,setPasswords]=useState(getStaffPasswords());
   const [adminPwd,setAdminPwd]=useState(getAdminPassword());
-  const [editing,setEditing]=useState(null); // empId or "admin"
+  const [editing,setEditing]=useState(null);
   const [newPwd,setNewPwd]=useState("");
   const [show,setShow]=useState({});
   const [saved,setSaved]=useState("");
+  const [pmTab,setPmTab]=useState("passwords"); // "passwords" | "team"
+  // Dynamic L1 staff stored in Supabase table: it_team
+  const [dynStaff,setDynStaff]=useState(null); // null = loading
+  const [addForm,setAddForm]=useState({team:"software",name:"",id:"",password:""});
+  const [addErr,setAddErr]=useState("");
+  const [teamSaved,setTeamSaved]=useState("");
 
-  const allStaff=getAllStaff();
+  useEffect(()=>{ loadDynStaff(); },[]);
+
+  async function loadDynStaff(){
+    try{
+      const rows=await sbGet("it_team","order=team.asc,level.asc,name.asc");
+      setDynStaff(rows);
+    }catch(e){ setDynStaff([]); }
+  }
+
+  // Merge static TEAM_CONFIG with dynamic overrides from DB
+  function getEffectiveTeam(){
+    if(!dynStaff) return TEAM_CONFIG;
+    const merged={};
+    Object.keys(TEAM_CONFIG).forEach(team=>{
+      const dbL1=dynStaff.filter(s=>s.team===team&&s.level==="L1");
+      merged[team]={
+        ...TEAM_CONFIG[team],
+        l1: dbL1.length>0 ? dbL1 : TEAM_CONFIG[team].l1,
+      };
+    });
+    return merged;
+  }
+
+  async function addL1Member(){
+    setAddErr("");
+    if(!addForm.name.trim()||!addForm.id.trim()||!addForm.password.trim()){setAddErr("All fields required.");return;}
+    if(addForm.password.length<4){setAddErr("Password min 4 chars.");return;}
+    try{
+      await sbPost("it_team",{team:addForm.team,level:"L1",name:addForm.name.trim(),id:addForm.id.trim(),password:addForm.password.trim()});
+      setAddForm({team:"software",name:"",id:"",password:""});
+      setTeamSaved("Member added!");
+      setTimeout(()=>setTeamSaved(""),3000);
+      await loadDynStaff();
+    }catch(e){setAddErr("Failed to save. Check it_team table exists.");}
+  }
+
+  async function deleteL1Member(rowId){
+    if(!window.confirm("Remove this L1 member?"))return;
+    try{
+      await fetch(`${API}/it_team?id=eq.${rowId}`,{method:"DELETE",headers:{...HEADERS,"Prefer":"return=minimal"}});
+      setTeamSaved("Member removed!");
+      setTimeout(()=>setTeamSaved(""),3000);
+      await loadDynStaff();
+    }catch(e){alert("Delete failed.");}
+  }
 
   function saveChange(){
     if(!newPwd||newPwd.length<4){alert("Password must be at least 4 characters.");return;}
@@ -1909,54 +1959,57 @@ function PasswordManager(){
 
   const LEVEL_COLOR={L1:"#16a34a",L2:RED};
   const TEAM_LABEL={software:"Software",hardware:"Hardware & Ops",network:"Network"};
+  const effectiveTeam=getEffectiveTeam();
 
   return(
     <div style={{padding:20,maxWidth:600,margin:"0 auto"}}>
-      <h2 style={{color:"#1a1a2e",fontSize:18,fontWeight:800,marginBottom:4}}>Password Management</h2>
-      <p style={{color:"#6b7280",fontSize:13,marginBottom:20}}>Change passwords for all IT staff and admin. Passwords are stored locally on this device.</p>
+      <h2 style={{color:"#1a1a2e",fontSize:18,fontWeight:800,marginBottom:4}}>Staff & Passwords</h2>
+      <p style={{color:"#6b7280",fontSize:13,marginBottom:16}}>Manage IT team members and login passwords.</p>
 
-      {saved&&<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"10px 14px",marginBottom:16,color:"#16a34a",fontWeight:600,fontSize:13}}>✅ Password updated successfully!</div>}
-
-      {/* Admin password */}
-      <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,marginBottom:12,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{width:38,height:38,borderRadius:10,background:LIGHT,display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <Settings size={18} color={RED}/>
-            </div>
-            <div>
-              <p style={{color:"#1a1a2e",fontWeight:700,fontSize:14}}>Admin</p>
-              <p style={{color:"#9ca3af",fontSize:12}}>Full dashboard access</p>
-            </div>
-          </div>
-          <button onClick={()=>{setEditing("admin");setNewPwd("");}} style={{padding:"7px 14px",borderRadius:8,border:`1.5px solid ${RED}`,background:LIGHT,color:RED,fontSize:12,fontWeight:700,cursor:"pointer"}}>Change</button>
-        </div>
-        {editing==="admin"&&(
-          <div style={{marginTop:12,display:"flex",gap:8}}>
-            <div style={{flex:1,position:"relative"}}>
-              <input style={{...INP,paddingRight:60}} type={show["admin"]?"text":"password"} placeholder="New password" value={newPwd} onChange={e=>setNewPwd(e.target.value)} onKeyDown={e=>e.key==="Enter"&&saveChange()}/>
-              <button onClick={()=>setShow(s=>({...s,admin:!s.admin}))} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#9ca3af",fontSize:11}}>{show["admin"]?"Hide":"Show"}</button>
-            </div>
-            <button onClick={saveChange} style={{padding:"0 16px",borderRadius:8,background:RED,border:"none",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>Save</button>
-            <button onClick={()=>{setEditing(null);setNewPwd("");}} style={{padding:"0 12px",borderRadius:8,background:"#f3f4f6",border:"none",color:"#6b7280",cursor:"pointer",fontSize:13}}>✕</button>
-          </div>
-        )}
+      {/* Sub-tabs */}
+      <div style={{display:"flex",gap:8,marginBottom:20,background:"#f3f4f6",borderRadius:10,padding:4}}>
+        {[["passwords","🔑 Passwords"],["team","👥 Team Management"]].map(([t,l])=>(
+          <button key={t} onClick={()=>setPmTab(t)} style={{flex:1,padding:"8px 0",borderRadius:8,border:"none",background:pmTab===t?"#fff":"transparent",color:pmTab===t?"#1a1a2e":"#6b7280",fontWeight:pmTab===t?700:500,fontSize:13,cursor:"pointer",boxShadow:pmTab===t?"0 1px 4px rgba(0,0,0,0.08)":"none",transition:"all .2s"}}>{l}</button>
+        ))}
       </div>
 
-      {/* Group staff by team */}
-      {Object.entries(TEAM_CONFIG).map(([team,cfg])=>(
-        <div key={team} style={{marginBottom:16}}>
-          <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>{TEAM_LABEL[team]}</p>
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {[...cfg.l1.map(s=>({...s,level:"L1"})),...cfg.l2.map(s=>({...s,level:"L2"}))].map(staff=>{
-              const currentPwd=passwords[staff.id]||staff.password;
-              return(
+      {pmTab==="passwords"&&(<>
+        {saved&&<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"10px 14px",marginBottom:16,color:"#16a34a",fontWeight:600,fontSize:13}}>✅ Password updated!</div>}
+
+        {/* Admin password */}
+        <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,marginBottom:12,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:38,height:38,borderRadius:10,background:LIGHT,display:"flex",alignItems:"center",justifyContent:"center"}}><Settings size={18} color={RED}/></div>
+              <div>
+                <p style={{color:"#1a1a2e",fontWeight:700,fontSize:14}}>Admin</p>
+                <p style={{color:"#9ca3af",fontSize:12}}>Full dashboard access</p>
+              </div>
+            </div>
+            <button onClick={()=>{setEditing("admin");setNewPwd("");}} style={{padding:"7px 14px",borderRadius:8,border:`1.5px solid ${RED}`,background:LIGHT,color:RED,fontSize:12,fontWeight:700,cursor:"pointer"}}>Change</button>
+          </div>
+          {editing==="admin"&&(
+            <div style={{marginTop:12,display:"flex",gap:8}}>
+              <div style={{flex:1,position:"relative"}}>
+                <input style={{...INP,paddingRight:60}} type={show["admin"]?"text":"password"} placeholder="New password" value={newPwd} onChange={e=>setNewPwd(e.target.value)} onKeyDown={e=>e.key==="Enter"&&saveChange()}/>
+                <button onClick={()=>setShow(s=>({...s,admin:!s.admin}))} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#9ca3af",fontSize:11}}>{show["admin"]?"Hide":"Show"}</button>
+              </div>
+              <button onClick={saveChange} style={{padding:"0 16px",borderRadius:8,background:RED,border:"none",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>Save</button>
+              <button onClick={()=>{setEditing(null);setNewPwd("");}} style={{padding:"0 12px",borderRadius:8,background:"#f3f4f6",border:"none",color:"#6b7280",cursor:"pointer",fontSize:13}}>✕</button>
+            </div>
+          )}
+        </div>
+
+        {/* Group staff by team */}
+        {Object.entries(effectiveTeam).map(([team,cfg])=>(
+          <div key={team} style={{marginBottom:16}}>
+            <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>{TEAM_LABEL[team]}</p>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {[...cfg.l1.map(s=>({...s,level:"L1"})),...cfg.l2.map(s=>({...s,level:"L2"}))].map(staff=>(
                 <div key={staff.id} style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:12,padding:14,boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <div style={{display:"flex",alignItems:"center",gap:10}}>
-                      <div style={{width:36,height:36,borderRadius:10,background:staff.level==="L2"?LIGHT:"#f0fdf4",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                        <User size={16} color={LEVEL_COLOR[staff.level]}/>
-                      </div>
+                      <div style={{width:36,height:36,borderRadius:10,background:staff.level==="L2"?LIGHT:"#f0fdf4",display:"flex",alignItems:"center",justifyContent:"center"}}><User size={16} color={LEVEL_COLOR[staff.level]}/></div>
                       <div>
                         <div style={{display:"flex",alignItems:"center",gap:6}}>
                           <p style={{color:"#1a1a2e",fontWeight:700,fontSize:13}}>{staff.name}</p>
@@ -1978,23 +2031,89 @@ function PasswordManager(){
                     </div>
                   )}
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-
-      {/* L3/L4 info — read only */}
-      <div style={{background:"#f9fafb",border:"1px dashed #e5e7eb",borderRadius:12,padding:14,marginTop:8}}>
-        <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>Escalation Chain (View Only)</p>
-        {[["L3",TEAM_CONFIG.software.l3],["L4",TEAM_CONFIG.software.l4]].map(([lvl,name])=>(
-          <div key={lvl} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",borderBottom:"1px solid #f3f4f6"}}>
-            <span style={{background:"#f3f4f6",color:"#374151",fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:4,minWidth:28,textAlign:"center"}}>{lvl}</span>
-            <span style={{color:"#374151",fontSize:13,fontWeight:600}}>{name}</span>
-            <span style={{color:"#9ca3af",fontSize:11,marginLeft:"auto"}}>No portal login</span>
+              ))}
+            </div>
           </div>
         ))}
-      </div>
+
+        {/* L3/L4 */}
+        <div style={{background:"#f9fafb",border:"1px dashed #e5e7eb",borderRadius:12,padding:14,marginTop:8}}>
+          <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>Escalation Chain (View Only)</p>
+          {[["L3",TEAM_CONFIG.software.l3],["L4",TEAM_CONFIG.software.l4]].map(([lvl,name])=>(
+            <div key={lvl} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",borderBottom:"1px solid #f3f4f6"}}>
+              <span style={{background:"#f3f4f6",color:"#374151",fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:4,minWidth:28,textAlign:"center"}}>{lvl}</span>
+              <span style={{color:"#374151",fontSize:13,fontWeight:600}}>{name}</span>
+              <span style={{color:"#9ca3af",fontSize:11,marginLeft:"auto"}}>No portal login</span>
+            </div>
+          ))}
+        </div>
+      </>)}
+
+      {pmTab==="team"&&(<>
+        {teamSaved&&<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"10px 14px",marginBottom:16,color:"#16a34a",fontWeight:600,fontSize:13}}>✅ {teamSaved}</div>}
+        {addErr&&<div style={{background:"#fff0f0",border:"1px solid #fca5a5",borderRadius:10,padding:"10px 14px",marginBottom:16,color:RED,fontWeight:600,fontSize:13}}>⚠️ {addErr}</div>}
+
+        {/* Add new L1 */}
+        <div style={{background:"#fff",border:`1.5px solid ${RED}30`,borderRadius:14,padding:16,marginBottom:20,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+          <p style={{color:"#1a1a2e",fontWeight:700,fontSize:14,marginBottom:12}}>➕ Add New L1 Member</p>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            <div>
+              <p style={{color:"#6b7280",fontSize:11,fontWeight:600,marginBottom:4}}>TEAM</p>
+              <div style={{display:"flex",gap:8}}>
+                {Object.entries(TEAM_LABEL).map(([k,v])=>(
+                  <button key={k} onClick={()=>setAddForm(f=>({...f,team:k}))} style={{flex:1,padding:"8px 4px",borderRadius:8,border:`2px solid ${addForm.team===k?RED:"#e5e7eb"}`,background:addForm.team===k?LIGHT:"#fff",color:addForm.team===k?RED:"#6b7280",fontSize:11,fontWeight:700,cursor:"pointer"}}>{v}</button>
+                ))}
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <div>
+                <p style={{color:"#6b7280",fontSize:11,fontWeight:600,marginBottom:4}}>FULL NAME</p>
+                <input style={INP} placeholder="e.g. Rahul Sharma" value={addForm.name} onChange={e=>setAddForm(f=>({...f,name:e.target.value}))}/>
+              </div>
+              <div>
+                <p style={{color:"#6b7280",fontSize:11,fontWeight:600,marginBottom:4}}>EMPLOYEE ID</p>
+                <input style={INP} placeholder="e.g. R002" value={addForm.id} onChange={e=>setAddForm(f=>({...f,id:e.target.value}))}/>
+              </div>
+            </div>
+            <div>
+              <p style={{color:"#6b7280",fontSize:11,fontWeight:600,marginBottom:4}}>PASSWORD</p>
+              <input style={INP} placeholder="Min 4 characters" value={addForm.password} onChange={e=>setAddForm(f=>({...f,password:e.target.value}))}/>
+            </div>
+            <button onClick={addL1Member} style={{padding:"10px",borderRadius:10,background:RED,border:"none",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Add to {TEAM_LABEL[addForm.team]} Team</button>
+          </div>
+        </div>
+
+        {/* Current L1 list — from DB */}
+        {dynStaff===null?<Spinner/>:Object.entries(TEAM_LABEL).map(([team,label])=>{
+          const members=dynStaff.filter(s=>s.team===team&&s.level==="L1");
+          const staticL1=TEAM_CONFIG[team].l1;
+          return(
+            <div key={team} style={{marginBottom:16}}>
+              <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>{label} — L1</p>
+              {members.length===0?(
+                <div style={{background:"#f9fafb",borderRadius:10,padding:"12px 16px",color:"#9ca3af",fontSize:13}}>
+                  Using default: {staticL1.map(s=>s.name).join(", ")}
+                </div>
+              ):members.map(s=>(
+                <div key={s.id} style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:12,padding:"12px 14px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <div style={{width:34,height:34,borderRadius:9,background:"#f0fdf4",display:"flex",alignItems:"center",justifyContent:"center"}}><User size={15} color="#16a34a"/></div>
+                    <div>
+                      <p style={{color:"#1a1a2e",fontWeight:700,fontSize:13}}>{s.name}</p>
+                      <p style={{color:"#9ca3af",fontSize:11}}>ID: {s.id} · L1 · {label}</p>
+                    </div>
+                  </div>
+                  <button onClick={()=>deleteL1Member(s.id)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #fca5a5",background:"#fff0f0",color:RED,fontSize:12,fontWeight:700,cursor:"pointer"}}>Remove</button>
+                </div>
+              ))}
+            </div>
+          );
+        })}
+
+        <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"10px 14px",marginTop:8}}>
+          <p style={{color:"#92400e",fontSize:12,fontWeight:600}}>⚠️ Note: Adding members here overrides the default L1 list for that team. Removing all DB members reverts to defaults.</p>
+        </div>
+      </>)}
     </div>
   );
 }
