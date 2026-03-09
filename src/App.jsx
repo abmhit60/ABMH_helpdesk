@@ -2347,9 +2347,20 @@ function AdminApp({onLogout,notifProps}){
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function App(){
-  const [user,setUser]=useState(null);
+  const [user,setUser]=useState(()=>{
+    try{const s=sessionStorage.getItem("abmh_user");return s?JSON.parse(s):null;}catch{return null;}
+  });
   const [slaConfig,setSlaConfig]=useState([]);
   const {toasts,notifications,dismissToast,markRead,markAllRead}=useNotifications(user);
+
+  function login(u){
+    try{sessionStorage.setItem("abmh_user",JSON.stringify(u));}catch{}
+    setUser(u);
+  }
+  function logout(){
+    try{sessionStorage.removeItem("abmh_user");}catch{}
+    setUser(null);
+  }
 
   useEffect(()=>{
     if(user?.role==="user"){
@@ -2363,12 +2374,12 @@ export default function App(){
     <>
       <ToastContainer toasts={toasts} onDismiss={dismissToast}/>
       {user===null
-        ?<LoginScreen onLogin={setUser}/>
+        ?<LoginScreen onLogin={login}/>
         :user.role==="admin"
-          ?<AdminApp onLogout={()=>setUser(null)} notifProps={notifProps}/>
+          ?<AdminApp onLogout={logout} notifProps={notifProps}/>
           :user.role==="staff"
-            ?<TechnicianApp user={user} onLogout={()=>setUser(null)} notifProps={notifProps}/>
-            :<UserApp user={user} slaConfig={slaConfig} onLogout={()=>setUser(null)} notifProps={notifProps}/>
+            ?<TechnicianApp user={user} onLogout={logout} notifProps={notifProps}/>
+            :<UserApp user={user} slaConfig={slaConfig} onLogout={logout} notifProps={notifProps}/>
       }
     </>
   );
