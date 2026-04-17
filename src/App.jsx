@@ -153,19 +153,20 @@ const STATUSES=["Open","In Progress","Resolved"];
 
 // ─── Team / Escalation Config ─────────────────────────────────────────────────
 const TEAM_CONFIG = {
-  software:{
-    l1:[{id:"R001",name:"Rushiraj Puri",  password:"Rushiraj2026"}],
-    l2:[{id:"9662",name:"Hari B S",       password:"Hari2026"}],
+  software: {
+    l1: [{id:"AB001", name:"Abhay", password:"1234"}],
+    l2: [{id:"9662",  name:"Hari B S", password:"1234"}],
     l3:"Suraj Kumar", l4:"Harshad Raut",
   },
-  hardware:{
-    l1:[{id:"T001",name:"Thejas",  password:"Thejas2026"},{id:"A001",name:"Aarti",password:"Aarti2026"}],
-    l2:[{id:"10334",name:"Sachin Mahadik",password:"Sachin2026"}],
+  hardware: {
+    l1: [{id:"T001",  name:"Thejas",        password:"1234"},
+         {id:"10067", name:"Aarti Patole",  password:"1234"}],
+    l2: [{id:"10334", name:"Sachin Mahadik",password:"1234"}],
     l3:"Suraj Kumar", l4:"Harshad Raut",
   },
-  network:{
-    l1:[{id:"S001",name:"Swapnil",password:"Swapnil2026"}],
-    l2:[{id:"2128",name:"Jagdish More",password:"Jagdish2026"}],
+  network: {
+    l1: [],
+    l2: [{id:"2128", name:"Jagdish More", password:"1234"}],
     l3:"Suraj Kumar", l4:"Harshad Raut",
   },
 };
