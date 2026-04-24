@@ -28,7 +28,6 @@ const fl=document.createElement("link");fl.rel="stylesheet";
 fl.href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap";
 document.head.appendChild(fl);
 
-// ─── Notification styles ───────────────────────────────────────────────────────
 const ns=document.createElement("style");
 ns.textContent=`
 @keyframes toastIn{from{transform:translateX(115%);opacity:0;}to{transform:translateX(0);opacity:1;}}
@@ -59,14 +58,11 @@ st.textContent=`
   input:focus,select:focus,textarea:focus{border-color:#c41e3a!important;box-shadow:0 0 0 3px rgba(196,30,58,0.1)!important;}
   select option{background:#fff;color:#1a1a2e;}
   button{font-family:'Plus Jakarta Sans',sans-serif;}
-  /* ── Desktop full-screen layout ── */
   @media(min-width:768px){
-    /* Admin layout */
     .page-shell{display:grid!important;grid-template-columns:240px 1fr;min-height:100vh;max-width:100%!important;width:100%!important;}
     .sidebar{display:flex!important;flex-direction:column;}
     .bottom-nav{display:none!important;}
     .main-topbar{left:240px!important;width:calc(100% - 240px)!important;transform:none!important;max-width:none!important;right:0!important;}
-    /* User layout */
     .user-shell{display:grid!important;grid-template-columns:220px 1fr!important;min-height:100vh;max-width:100%!important;width:100%!important;margin:0!important;}
     .user-sidebar{display:flex!important;}
     .user-topbar{left:220px!important;width:calc(100% - 220px)!important;transform:none!important;max-width:none!important;right:0!important;}
@@ -82,7 +78,7 @@ const RED   = "#c41e3a";
 const DARK  = "#8b0000";
 const LIGHT = "#fff5f5";
 
-// ── Category / Software / Hardware / Network tree ─────────────────────────────
+// ─── FIX 2: Added "Others" sub-category to all 3 main categories ──────────────
 const MAIN_CATEGORIES = {
   software: {
     label:"Software", icon:Monitor, color:"#0369a1", bg:"#eff6ff",
@@ -90,6 +86,7 @@ const MAIN_CATEGORIES = {
       HIS:["OPD Registration","IPD Admission","Billing & Invoicing","Pharmacy","Lab / Pathology","Radiology","EMR / Patient Records","Discharge Summary","Appointment Scheduling","Insurance / TPA","MIS Reports","User Management"],
       ERP:["Finance & Accounts","Inventory & Stores","Purchase & Procurement","Fixed Assets","Budget Management"],
       PACS:["Radiology Viewer (DICOM)","Image Archive","Worklist Management","Report Generation","CD Burning","Integration with HIS"],
+      Others:["Other Software Issue","Access / Permission Issue","Integration Issue","New Software Request","Miscellaneous"],
     }
   },
   hardware:{
@@ -101,6 +98,7 @@ const MAIN_CATEGORIES = {
       "Biometric / Access Control":["Fingerprint Not Reading","Device Offline","Door Not Opening","Enrollment Issue","Software Sync Issue"],
       "Other Hardware":["Projector","TV / Display","CCTV","Barcode Scanner","Other"],
       "Email / Server":["Email Not Working","Outlook Issue","Server Unreachable","Shared Drive Issue","Backup Issue"],
+      Others:["Other Hardware Issue","New Equipment Request","Repair Request","Miscellaneous","Not Listed Above"],
     }
   },
   network:{
@@ -110,24 +108,22 @@ const MAIN_CATEGORIES = {
       "WiFi Issues":["No WiFi Signal","Weak Signal","Cannot Connect","IP Conflict","New WiFi Point Request"],
       "Switch / Router":["Port Not Working","Switch Down","VLAN Issue","Configuration Change","New Point Request"],
       "IP Phone / EPABX":["Phone Dead","No Dial Tone","Extension Issue","EPABX Programming","New Extension Request"],
+      Others:["Other Network Issue","New Connection Request","Firewall / Blocking Issue","Miscellaneous","Not Listed Above"],
     }
   }
 };
 
-// ── OLA: Response time by sub-category (shown to user when raising ticket) ──
+// ─── FIX 2: Added "Others" response time ─────────────────────────────────────
 const SUBCAT_RESPONSE = {
-  // Software
   "HIS":1, "ERP":2, "PACS":1,
-  // Hardware
   "Desktop / Laptop":2, "Printer / Scanner":2, "UPS / Power":1,
   "Biometric / Access Control":2, "Other Hardware":4,
-  // Network
   "Internet / Connectivity":1, "WiFi Issues":1, "Switch / Router":1,
   "IP Phone / EPABX":2, "Email / Server":1,
+  "Others":4,
 };
 function getResponseTime(subCat){ return SUBCAT_RESPONSE[subCat]||2; }
 
-// ── OLA: Resolution time by priority (set by technician, shown everywhere) ──
 const PRIORITY_RESOLUTION = {
   software: { Critical:2,  High:4,  Medium:8,  Low:24 },
   hardware: { Critical:4,  High:8,  Medium:24, Low:48 },
@@ -136,7 +132,6 @@ const PRIORITY_RESOLUTION = {
 function getResolutionTime(mainCat,priority){
   return PRIORITY_RESOLUTION[mainCat]?.[priority]||8;
 }
-// kept for backward compat in reports
 function getOlaTimes(mainCat,priority){
   return {response:2, resolution:getResolutionTime(mainCat,priority)};
 }
@@ -151,60 +146,60 @@ const DEPARTMENTS=["OPD","IPD","Emergency","Pharmacy","Radiology","Lab / Patholo
 const PRIORITIES=["Critical","High","Medium","Low"];
 const STATUSES=["Open","In Progress","Resolved"];
 
-// ─── Team / Escalation Config ─────────────────────────────────────────────────
+// ─── TEAM_CONFIG: kept for L3/L4 escalation chain display only ───────────────
+// FIX 3 & 4: Login and passwords now read/write from Supabase it_team table
 const TEAM_CONFIG = {
-  software: {
-    l1: [{id:"AB001", name:"Abhay", password:"1234"}],
-    l2: [{id:"9662",  name:"Hari B S", password:"1234"}],
-    l3:"Suraj Kumar", l4:"Harshad Raut",
-  },
-  hardware: {
-    l1: [{id:"T001",  name:"Thejas",        password:"1234"},
-         {id:"10067", name:"Aarti Patole",  password:"1234"}],
-    l2: [{id:"10334", name:"Sachin Mahadik",password:"1234"}],
-    l3:"Suraj Kumar", l4:"Harshad Raut",
-  },
-  network: {
-    l1: [],
-    l2: [{id:"2128", name:"Jagdish More", password:"1234"}],
-    l3:"Suraj Kumar", l4:"Harshad Raut",
-  },
+  software:{ l3:"Suraj Kumar", l4:"Harshad Raut" },
+  hardware:{ l3:"Suraj Kumar", l4:"Harshad Raut" },
+  network: { l3:"Suraj Kumar", l4:"Harshad Raut" },
 };
-// Flat list of all staff for login lookup
-function getL1ForTeam(team){
-  // For single L1, auto-assign; for multiple L1, leave unassigned so either can accept
-  const l1=TEAM_CONFIG[team]?.l1||[];
-  return l1.length===1?l1[0].name:"";
-}
-function getL2ForTeam(team){
-  return TEAM_CONFIG[team]?.l2?.[0]?.name||"";
-}
-function getAllStaff(){
-  const list=[];
-  Object.entries(TEAM_CONFIG).forEach(([team,cfg])=>{
-    cfg.l1.forEach(s=>list.push({...s,level:"L1",team}));
-    cfg.l2.forEach(s=>list.push({...s,level:"L2",team}));
-  });
-  return list;
-}
-function getStaffPasswords(){try{const s=localStorage.getItem("abmh_staff_pwd");return s?JSON.parse(s):{};}catch{return{};}}
-function saveStaffPasswords(o){try{localStorage.setItem("abmh_staff_pwd",JSON.stringify(o));}catch{}}
-function getAdminPassword(){try{return localStorage.getItem("abmh_admin_pwd")||"admin123";}catch{return"admin123";}}
-function saveAdminPassword(p){try{localStorage.setItem("abmh_admin_pwd",p);}catch{}}
-function verifyStaff(empId,password){
-  const overrides=getStaffPasswords();
-  const staff=getAllStaff().find(s=>s.id===empId);
-  if(!staff)return null;
-  const pwd=overrides[empId]||staff.password;
-  if(pwd!==password)return null;
-  return{role:"staff",level:staff.level,team:staff.team,name:staff.name,empId:staff.id};
-}
 
 const DEFAULT_SLA={
   software:{bug:{Critical:2,High:4,Medium:8,Low:24},cr:{Critical:48,High:72,Medium:72,Low:72},support:{Critical:1,High:1,Medium:2,Low:4}},
   hardware:{bug:{Critical:2,High:4,Medium:8,Low:24},cr:{Critical:24,High:48,Medium:72,Low:72},support:{Critical:1,High:2,Medium:4,Low:8}},
   network: {bug:{Critical:1,High:2,Medium:4,Low:8}, cr:{Critical:4, High:8, Medium:24,Low:48},support:{Critical:1,High:1,Medium:2,Low:4}},
 };
+
+// ─── FIX 3 & 4: Supabase-based staff auth ────────────────────────────────────
+// Verify staff by querying it_team table in Supabase
+async function verifyStaffFromDB(empId, password) {
+  try {
+    const rows = await sbGet("it_team", `emp_id=eq.${encodeURIComponent(empId.trim())}`);
+    if (!rows || rows.length === 0) return null;
+    const staff = rows[0];
+    if (staff.password !== password) return null;
+    // Map team name from DB to internal key
+    const teamMap = {
+      "Software": "software",
+      "Hardware & Ops": "hardware",
+      "Network": "network",
+    };
+    const teamKey = teamMap[staff.team] || staff.team?.toLowerCase() || "software";
+    return {
+      role: "staff",
+      level: staff.level,
+      team: teamKey,
+      name: staff.name,
+      empId: staff.emp_id,
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+// Get all staff from Supabase for display purposes
+async function getAllStaffFromDB() {
+  try {
+    const rows = await sbGet("it_team", "order=team.asc,level.asc,name.asc");
+    return rows || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+// Admin password — still localStorage (admin doesn't have a DB row)
+function getAdminPassword(){try{return localStorage.getItem("abmh_admin_pwd")||"admin123";}catch{return"admin123";}}
+function saveAdminPassword(p){try{localStorage.setItem("abmh_admin_pwd",p);}catch{}}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function genId(){const d=new Date();return `TKT-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}-${String(Math.floor(Math.random()*9000)+1000)}`;}
@@ -229,7 +224,7 @@ function pct(num,den){return den===0?0:Math.round((num/den)*100);}
 
 // ─── Shared UI ────────────────────────────────────────────────────────────────
 function StatusBadge({status}){
-  const m={"Open":{c:"#0369a1",bg:"#eff6ff"},"In Progress":{c:"#d97706",bg:"#fffbeb"},"Resolved":{c:"#16a34a",bg:"#f0fdf4"},"Resolved":{c:"#6b7280",bg:"#f9fafb"}};
+  const m={"Open":{c:"#0369a1",bg:"#eff6ff"},"In Progress":{c:"#d97706",bg:"#fffbeb"},"Resolved":{c:"#16a34a",bg:"#f0fdf4"}};
   const s=m[status]||m["Open"];
   return <span style={{background:s.bg,color:s.c,padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:700,border:`1px solid ${s.c}30`}}>{status}</span>;
 }
@@ -268,7 +263,6 @@ function CalendarDropdown({anchorEl,startDate,endDate,onChange,onClose}){
       onClose();
     }
   }
-  // position relative to anchor
   const rect=anchorEl?anchorEl.getBoundingClientRect():{top:0,left:0,width:300};
   const top=rect.bottom+window.scrollY+6;
   const left=Math.min(rect.left+window.scrollX, window.innerWidth-320);
@@ -308,28 +302,19 @@ function DateRangePicker({startDate,endDate,onChange}){
   const [open,setOpen]=useState(false);
   const btnRef=useRef(null);
   const [,forceUpdate]=useState(0);
-
   useEffect(()=>{
     if(!open)return;
-    function onDown(e){
-      if(btnRef.current&&btnRef.current.contains(e.target))return;
-      setOpen(false);
-    }
+    function onDown(e){if(btnRef.current&&btnRef.current.contains(e.target))return;setOpen(false);}
     document.addEventListener("mousedown",onDown);
     return()=>document.removeEventListener("mousedown",onDown);
   },[open]);
-
-  // Re-render on scroll/resize to reposition
   useEffect(()=>{
     if(!open)return;
     const h=()=>forceUpdate(n=>n+1);
-    window.addEventListener("scroll",h,true);
-    window.addEventListener("resize",h);
+    window.addEventListener("scroll",h,true);window.addEventListener("resize",h);
     return()=>{window.removeEventListener("scroll",h,true);window.removeEventListener("resize",h);};
   },[open]);
-
   const label=startDate?`${fmtDate(startDate.toISOString())}${endDate?" → "+fmtDate(endDate.toISOString()):"  (select end…)"}`:"Select date range";
-
   return(
     <>
       <button ref={btnRef} onClick={()=>setOpen(o=>!o)} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:"#fff",border:`1.5px solid ${open?RED:"#e5e7eb"}`,borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600,color:startDate?RED:"#6b7280",width:"100%",justifyContent:"space-between"}}>
@@ -353,7 +338,6 @@ const NOTIF_COLORS={
   escalated:   {bg:"#f5f3ff",border:"#ddd6fe",icon:"⬆️",label:"Escalated",  tc:"#7c3aed"},
 };
 
-// Toast Component
 function ToastContainer({toasts,onDismiss}){
   return ReactDOM.createPortal(
     <div className="abmh-toast-wrap">
@@ -377,39 +361,29 @@ function ToastContainer({toasts,onDismiss}){
   );
 }
 
-// Bell + Dropdown Component
 function BellNotifications({notifications,onMarkRead,onMarkAll}){
   const [open,setOpen]=useState(false);
   const [bellRing,setBellRing]=useState(false);
   const ref=useRef(null);
   const unread=notifications.filter(n=>!n.read).length;
-
-  // Ring bell when new notification arrives
-  useEffect(()=>{
-    if(unread>0){setBellRing(true);setTimeout(()=>setBellRing(false),700);}
+  useEffect(()=>{if(unread>0){setBellRing(true);setTimeout(()=>setBellRing(false),700);}
   },[unread]);
-
   useEffect(()=>{
     function onDown(e){if(ref.current&&!ref.current.contains(e.target))setOpen(false);}
     document.addEventListener("mousedown",onDown);
     return()=>document.removeEventListener("mousedown",onDown);
   },[]);
-
   const fmtAgo=(iso)=>{
     const d=Date.now()-new Date(iso).getTime();
-    if(d<60000)return"Just now";
-    if(d<3600000)return`${Math.floor(d/60000)}m ago`;
-    if(d<86400000)return`${Math.floor(d/3600000)}h ago`;
-    return fmtDate(iso);
+    if(d<60000)return"Just now";if(d<3600000)return`${Math.floor(d/60000)}m ago`;
+    if(d<86400000)return`${Math.floor(d/3600000)}h ago`;return fmtDate(iso);
   };
-
   return(
     <div ref={ref} style={{position:"relative"}}>
       <button onClick={()=>setOpen(o=>!o)} className={bellRing?"bell-ring":""} style={{width:38,height:38,borderRadius:11,background:open?LIGHT:"#f9fafb",border:`1.5px solid ${open?RED:"#e5e7eb"}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",position:"relative",transition:"all .2s"}}>
         <Bell size={17} color={open?RED:"#6b7280"}/>
         {unread>0&&<span style={{position:"absolute",top:-5,right:-5,background:RED,color:"#fff",fontSize:9,fontWeight:800,minWidth:16,height:16,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid #fff",padding:"0 3px"}}>{unread>9?"9+":unread}</span>}
       </button>
-
       {open&&ReactDOM.createPortal(
         <div style={{position:"fixed",top:(ref.current?.getBoundingClientRect().bottom||60)+window.scrollY+6,right:16,width:300,background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:16,boxShadow:"0 12px 40px rgba(0,0,0,0.18)",zIndex:99998,overflow:"hidden"}}>
           <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -418,13 +392,11 @@ function BellNotifications({notifications,onMarkRead,onMarkAll}){
           </div>
           <div style={{maxHeight:340,overflowY:"auto"}}>
             {notifications.length===0?(
-              <div style={{padding:"32px 16px",textAlign:"center"}}>
-                <p style={{fontSize:13,color:"#9ca3af"}}>No notifications yet</p>
-              </div>
+              <div style={{padding:"32px 16px",textAlign:"center"}}><p style={{fontSize:13,color:"#9ca3af"}}>No notifications yet</p></div>
             ):notifications.map(n=>{
               const cfg=NOTIF_COLORS[n.type]||NOTIF_COLORS.new_ticket;
               return(
-                <div key={n.id} onClick={()=>onMarkRead(n.id)} style={{padding:"11px 16px",borderBottom:"1px solid #f9fafb",display:"flex",gap:10,cursor:"pointer",background:n.read?"#fff":"#fafbff",transition:"background .15s"}}>
+                <div key={n.id} onClick={()=>onMarkRead(n.id)} style={{padding:"11px 16px",borderBottom:"1px solid #f9fafb",display:"flex",gap:10,cursor:"pointer",background:n.read?"#fff":"#fafbff"}}>
                   {!n.read&&<div style={{width:6,height:6,borderRadius:"50%",background:RED,flexShrink:0,marginTop:6}}/>}
                   <div style={{width:30,height:30,borderRadius:8,background:cfg.bg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:14}}>{cfg.icon}</div>
                   <div style={{flex:1,minWidth:0}}>
@@ -448,89 +420,55 @@ function BellNotifications({notifications,onMarkRead,onMarkAll}){
   );
 }
 
-// useNotifications hook — handles Supabase Realtime + toast + bell
 function useNotifications(user){
   const [toasts,setToasts]=useState([]);
   const [notifications,setNotifications]=useState([]);
   const [loading,setLoading]=useState(true);
-
-  // Load existing notifications from DB
-  useEffect(()=>{
-    if(!user)return;
-    loadNotifications();
-  },[user]);
-
+  useEffect(()=>{if(!user)return;loadNotifications();},[user]);
   async function loadNotifications(){
     try{
       let q=`order=created_at.desc&limit=eq.50`;
       if(user.role==="user") q+=`&recipient_id=eq.${user.empId}`;
       else if(user.role==="staff") q+=`&recipient_team=eq.${user.team}`;
-      // admin sees all
       const rows=await sbGet("notifications",q);
       setNotifications(rows);
-    }catch(e){/* notifications table may not exist yet */}
+    }catch(e){}
     setLoading(false);
   }
-
-  // Supabase Realtime subscription
   useEffect(()=>{
     if(!user)return;
-    // Connect to Supabase Realtime via WebSocket
     const wsUrl=`${SUPABASE_URL.replace("https","wss")}/realtime/v1/websocket?apikey=${SUPABASE_KEY}&vsn=1.0.0`;
-    let ws;
-    let pingInterval;
+    let ws;let pingInterval;
     try{
       ws=new WebSocket(wsUrl);
       ws.onopen=()=>{
-        // Join the tickets channel
         ws.send(JSON.stringify({topic:"realtime:public:tickets",event:"phx_join",payload:{},ref:"1"}));
-        // Join notifications channel
         ws.send(JSON.stringify({topic:"realtime:public:notifications",event:"phx_join",payload:{},ref:"2"}));
         pingInterval=setInterval(()=>{ws.send(JSON.stringify({topic:"phoenix","event":"heartbeat",payload:{},ref:"hb"}));},30000);
       };
       ws.onmessage=(e)=>{
         try{
           const msg=JSON.parse(e.data);
-          if(msg.event==="INSERT"&&msg.topic==="realtime:public:tickets"){
-            handleNewTicket(msg.payload.record);
-          }
-          if(msg.event==="UPDATE"&&msg.topic==="realtime:public:tickets"){
-            handleTicketUpdate(msg.payload.record,msg.payload.old_record);
-          }
-          if(msg.event==="INSERT"&&msg.topic==="realtime:public:notifications"){
-            handleNewNotification(msg.payload.record);
-          }
+          if(msg.event==="INSERT"&&msg.topic==="realtime:public:tickets") handleNewTicket(msg.payload.record);
+          if(msg.event==="UPDATE"&&msg.topic==="realtime:public:tickets") handleTicketUpdate(msg.payload.record,msg.payload.old_record);
+          if(msg.event==="INSERT"&&msg.topic==="realtime:public:notifications") handleNewNotification(msg.payload.record);
         }catch{}
       };
     }catch(e){}
-    return()=>{
-      if(ws)ws.close();
-      if(pingInterval)clearInterval(pingInterval);
-    };
+    return()=>{if(ws)ws.close();if(pingInterval)clearInterval(pingInterval);};
   },[user]);
-
   function shouldReceive(record,type){
     if(!user)return false;
     if(user.role==="admin")return true;
-    if(user.role==="staff"){
-      // Technician sees new tickets + breaches for their team
-      if(type==="new_ticket"||type==="breach"||type==="escalated") return record.software===user.team;
-      return false;
-    }
-    if(user.role==="user"){
-      // Staff sees status updates on their own tickets
-      return record.emp_id===user.empId&&(type==="in_progress"||type==="resolved");
-    }
+    if(user.role==="staff"){if(type==="new_ticket"||type==="breach"||type==="escalated") return record.software===user.team;return false;}
+    if(user.role==="user") return record.emp_id===user.empId&&(type==="in_progress"||type==="resolved");
     return false;
   }
-
   function handleNewTicket(record){
     if(!shouldReceive(record,"new_ticket"))return;
-    const cat=MAIN_CATEGORIES[record.software];
     pushToast("new_ticket",`New Ticket — ${record.id}`,`${record.category} · ${record.dept} · ${record.user_name}`);
     saveNotification("new_ticket",`New Ticket — ${record.id}`,`${record.category} · ${record.dept} · ${record.user_name}`,record);
   }
-
   function handleTicketUpdate(record,old){
     if(!old||record.status===old.status)return;
     const newStatus=record.status;
@@ -543,16 +481,11 @@ function useNotifications(user){
       saveNotification("resolved",`Ticket Resolved — ${record.id}`,`${record.category} · Resolved by ${record.assigned_to}`,record);
     }
   }
-
   function handleNewNotification(record){
-    // New notification from DB — show toast if relevant to this user
     if(user.role==="admin"||record.recipient_id===user?.empId||record.recipient_team===user?.team){
-      // Already handled by handleNewTicket/handleTicketUpdate if same session
-      // Just refresh the bell
       setNotifications(prev=>[record,...prev.slice(0,49)]);
     }
   }
-
   function pushToast(type,title,message){
     const id=Date.now()+Math.random();
     setToasts(prev=>[...prev,{id,type,title,message}]);
@@ -562,32 +495,21 @@ function useNotifications(user){
       setTimeout(()=>setToasts(prev=>prev.filter(t=>t.id!==id)),350);
     },5000);
   }
-
   async function saveNotification(type,title,message,ticket){
     try{
-      const n={
-        type,title,message,
-        ticket_id:ticket.id,
-        recipient_id:ticket.emp_id,       // staff who raised
-        recipient_team:ticket.software,   // technician team
-        read:false,
-        created_at:new Date().toISOString(),
-      };
+      const n={type,title,message,ticket_id:ticket.id,recipient_id:ticket.emp_id,recipient_team:ticket.software,read:false,created_at:new Date().toISOString()};
       await sbPost("notifications",n);
     }catch{}
   }
-
   function dismissToast(id){
     const el=document.getElementById(`toast-${id}`);
     if(el)el.classList.add("out");
     setTimeout(()=>setToasts(prev=>prev.filter(t=>t.id!==id)),350);
   }
-
   async function markRead(id){
     setNotifications(prev=>prev.map(n=>n.id===id?{...n,read:true}:n));
     try{await sbPatch("notifications",`id=eq.${id}`,{read:true});}catch{}
   }
-
   async function markAllRead(){
     setNotifications(prev=>prev.map(n=>({...n,read:true})));
     try{
@@ -596,8 +518,6 @@ function useNotifications(user){
       else await sbPatch("notifications","read=eq.false",{read:true});
     }catch{}
   }
-
-  // OLA breach checker — runs every 2 minutes
   useEffect(()=>{
     if(!user||user.role==="user")return;
     const check=async()=>{
@@ -605,7 +525,6 @@ function useNotifications(user){
         const open=await sbGet("tickets","status=in.(Open,In%20Progress)&order=raised_at.asc");
         open.forEach(t=>{
           if(isSlaBreached(t)&&shouldReceive(t,"breach")){
-            // Only show once — check if we already toasted this breach
             const key=`breach_${t.id}`;
             if(!sessionStorage.getItem(key)){
               sessionStorage.setItem(key,"1");
@@ -619,11 +538,11 @@ function useNotifications(user){
     const iv=setInterval(check,120000);
     return()=>clearInterval(iv);
   },[user]);
-
   return{toasts,notifications,dismissToast,markRead,markAllRead};
 }
 
 // ─── Login Screen ─────────────────────────────────────────────────────────────
+// FIX 4: verifyStaff now calls Supabase
 function LoginScreen({onLogin}){
   const [mode,setMode]=useState("user");
   const [empId,setEmpId]=useState("");
@@ -655,7 +574,8 @@ function LoginScreen({onLogin}){
         if(adminUser==="admin"&&adminPass===pwd)onLogin({role:"admin",name:"Admin"});
         else setErr("Invalid admin credentials.");
       } else if(mode==="staff"){
-        const result=verifyStaff(staffId.trim(),staffPass);
+        // FIX 4: Now reads from Supabase it_team table
+        const result=await verifyStaffFromDB(staffId.trim(),staffPass);
         if(result)onLogin(result);
         else setErr("Invalid Employee ID or password.");
       } else {
@@ -670,7 +590,6 @@ function LoginScreen({onLogin}){
   }
 
   const MODES=[["user","Staff","🏥"],["staff","IT Team","🔧"],["admin","Admin","⚙️"]];
-
   return(
     <div className="login-shell" style={{minHeight:"100vh",width:"100%",background:"linear-gradient(135deg,#fff5f5 0%,#fff 50%,#fef2f2 100%)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
       <div style={{position:"fixed",top:0,left:0,right:0,height:5,background:`linear-gradient(90deg,${RED},${DARK})`}}/>
@@ -680,7 +599,6 @@ function LoginScreen({onLogin}){
           <h1 style={{color:"#1a1a2e",fontSize:22,fontWeight:800,letterSpacing:"-0.5px"}}>IT HelpDesk Portal</h1>
           <p style={{color:"#6b7280",fontSize:13,marginTop:4}}>Aditya Birla Memorial Hospital</p>
         </div>
-        {/* 3-tab switcher */}
         <div style={{display:"flex",background:"#f3f4f6",borderRadius:12,padding:4,marginBottom:24,border:"1px solid #e5e7eb",gap:4}}>
           {MODES.map(([v,l,icon])=>(
             <button key={v} onClick={()=>{setMode(v);setErr("");}} style={{flex:1,padding:"10px 0",borderRadius:9,border:"none",cursor:"pointer",fontWeight:700,fontSize:12,transition:"all .2s",background:mode===v?`linear-gradient(135deg,${RED},${DARK})`:"transparent",color:mode===v?"#fff":"#6b7280",boxShadow:mode===v?"0 2px 8px rgba(196,30,58,0.2)":"none"}}>
@@ -706,7 +624,6 @@ function LoginScreen({onLogin}){
               <input style={INP} placeholder="10-digit mobile number" maxLength={10} value={mobile} onChange={e=>setMobile(e.target.value.replace(/\D/g,""))} onKeyDown={e=>e.key==="Enter"&&handleLogin()}/>
             </div>
           </>)}
-
           {mode==="staff"&&(<>
             <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"10px 14px",marginBottom:16,display:"flex",alignItems:"center",gap:8}}>
               <span style={{fontSize:18}}>🔧</span>
@@ -727,7 +644,6 @@ function LoginScreen({onLogin}){
               </div>
             </div>
           </>)}
-
           {mode==="admin"&&(<>
             <div style={{marginBottom:14}}>
               <label style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:6,display:"block",textTransform:"uppercase",letterSpacing:"0.5px"}}>Username</label>
@@ -741,7 +657,6 @@ function LoginScreen({onLogin}){
               </div>
             </div>
           </>)}
-
           {err&&<ErrBox msg={err}/>}
           <button onClick={handleLogin} disabled={loading} style={BTN}>
             {loading?<><Loader size={16} className="spin"/>Verifying...</>:
@@ -767,6 +682,12 @@ function RaiseTicket({user,slaConfig,onDone}){
   const [submitted,setSubmitted]=useState(null);
   const [loading,setLoading]=useState(false);
   const [err,setErr]=useState("");
+  const [teamStaff,setTeamStaff]=useState([]);
+
+  // Load team staff from DB for display
+  useEffect(()=>{
+    if(mainCat) getAllStaffFromDB().then(rows=>setTeamStaff(rows));
+  },[mainCat]);
 
   const catDef=mainCat?MAIN_CATEGORIES[mainCat]:null;
   const subKeys=catDef?Object.keys(catDef.children):[];
@@ -774,6 +695,23 @@ function RaiseTicket({user,slaConfig,onDone}){
   const isSw=mainCat==="software";
   const defaultPriority="Medium";
   const canSubmit=mainCat&&subCat&&module&&dept&&desc.trim()&&!loading&&(isSw?!!issueType:true);
+
+  // Get L1 for team from DB staff
+  function getL1ForTeamDisplay(team){
+    const teamMap={"software":"Software","hardware":"Hardware & Ops","network":"Network"};
+    const dbLabel=teamMap[team]||team;
+    return teamStaff.filter(s=>s.team===dbLabel&&s.level==="L1");
+  }
+  function getL2ForTeamDisplay(team){
+    const teamMap={"software":"Software","hardware":"Hardware & Ops","network":"Network"};
+    const dbLabel=teamMap[team]||team;
+    const l2=teamStaff.filter(s=>s.team===dbLabel&&s.level==="L2");
+    return l2[0]?.name||"";
+  }
+  function getL1AutoAssign(team){
+    const l1=getL1ForTeamDisplay(team);
+    return l1.length===1?l1[0].name:"";
+  }
 
   async function submit(){
     if(!canSubmit)return;
@@ -785,12 +723,12 @@ function RaiseTicket({user,slaConfig,onDone}){
         id:genId(),emp_id:user.empId,user_name:user.name,mobile:user.mobile||"",dept,
         software:mainCat,category:subCat,module,issue_type:finalType,
         priority:defaultPriority,description:desc,status:"Open",
-        assigned_to:getL1ForTeam(mainCat),raised_at:new Date().toISOString(),
+        assigned_to:getL1AutoAssign(mainCat),raised_at:new Date().toISOString(),
         sla_deadline:new Date(Date.now()+hrs*3600000).toISOString(),note:""
       };
       const result=await sbPost("tickets",ticket);
       const saved=result[0]||ticket;
-      await sbPost("audit_log",{ticket_id:saved.id,action:"Ticket Created",changed_by:user.name,new_value:`Open — ${getL1ForTeam(mainCat)?'Assigned to '+getL1ForTeam(mainCat)+' (L1)':'Unassigned — awaiting L1 acceptance'}`});
+      await sbPost("audit_log",{ticket_id:saved.id,action:"Ticket Created",changed_by:user.name,new_value:`Open — ${getL1AutoAssign(mainCat)?'Assigned to '+getL1AutoAssign(mainCat)+' (L1)':'Unassigned — awaiting L1 acceptance'}`});
       setSubmitted(saved);
     }catch(e){setErr("Failed to submit. Please try again.");}
     setLoading(false);
@@ -805,14 +743,14 @@ function RaiseTicket({user,slaConfig,onDone}){
             <CheckCircle size={30} color="#16a34a"/>
           </div>
           <h2 style={{color:"#1a1a2e",fontSize:20,fontWeight:800}}>Ticket Raised!</h2>
-          <p style={{color:"#6b7280",fontSize:13,marginTop:4}}>Assigned to <strong>{submitted.assigned_to}</strong></p>
+          <p style={{color:"#6b7280",fontSize:13,marginTop:4}}>Assigned to <strong>{submitted.assigned_to||"IT Team"}</strong></p>
         </div>
         <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:16,padding:20,marginBottom:16,boxShadow:"0 2px 12px rgba(0,0,0,0.06)"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,paddingBottom:12,borderBottom:"1px solid #f3f4f6"}}>
             <span style={{color:RED,fontSize:15,fontWeight:800}}>{submitted.id}</span>
             <StatusBadge status="Open"/>
           </div>
-          {[["Category",cat?.label],["Sub-Category",submitted.category],["Issue",submitted.module],["Department",submitted.dept],["Mobile",submitted.mobile||"—"],["Assigned To",submitted.assigned_to],["OLA Deadline",fmt(submitted.sla_deadline)]].map(([k,v])=>(
+          {[["Category",cat?.label],["Sub-Category",submitted.category],["Issue",submitted.module],["Department",submitted.dept],["Mobile",submitted.mobile||"—"],["Assigned To",submitted.assigned_to||"Pending"],["OLA Deadline",fmt(submitted.sla_deadline)]].map(([k,v])=>(
             <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #f9fafb"}}>
               <span style={{color:"#6b7280",fontSize:13}}>{k}</span>
               <span style={{color:"#1a1a2e",fontSize:13,fontWeight:600}}>{v}</span>
@@ -843,7 +781,6 @@ function RaiseTicket({user,slaConfig,onDone}){
     <div style={{padding:20}}>
       <h2 className="fu" style={{color:"#1a1a2e",fontSize:20,fontWeight:800,marginBottom:4}}>Raise a Ticket</h2>
       <p className="fu1" style={{color:"#6b7280",fontSize:13,marginBottom:20}}>All fields are required</p>
-
       <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>1. Category</p>
       <div className="fu1" style={{display:"flex",gap:10,marginBottom:20}}>
         {Object.entries(MAIN_CATEGORIES).map(([key,cat])=>(
@@ -853,7 +790,6 @@ function RaiseTicket({user,slaConfig,onDone}){
           </button>
         ))}
       </div>
-
       {mainCat&&(<>
         <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>2. Sub-Category</p>
         <div className="fu1" style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
@@ -864,7 +800,6 @@ function RaiseTicket({user,slaConfig,onDone}){
           ))}
         </div>
       </>)}
-
       {subCat&&(<>
         <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>3. Specific Issue</p>
         <div className="fu2" style={{marginBottom:20}}>
@@ -874,29 +809,23 @@ function RaiseTicket({user,slaConfig,onDone}){
           </select>
         </div>
       </>)}
-
-      {/* Issue Type — Software only */}
       {module&&isSw&&(<>
         <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>4. Issue Type</p>
         <div className="fu2" style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
-          {ISSUE_TYPES.map(it=>{
-            return(
-              <button key={it.id} onClick={()=>setIssueType(it.id)} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:issueType===it.id?it.bg:"#fff",border:`2px solid ${issueType===it.id?it.color:"#e5e7eb"}`,borderRadius:12,cursor:"pointer",transition:"all .2s"}}>
-                <div style={{width:34,height:34,borderRadius:9,background:issueType===it.id?it.color+"20":"#f3f4f6",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                  <it.icon size={16} color={issueType===it.id?it.color:"#9ca3af"}/>
-                </div>
-                <div style={{flex:1}}>
-                  <p style={{color:"#1a1a2e",fontWeight:700,fontSize:13}}>{it.label}</p>
-                  <p style={{color:"#9ca3af",fontSize:11,marginTop:2}}>Response: {getResponseTime(subCat)}h · Resolution confirmed by technician</p>
-                </div>
-                {issueType===it.id&&<CheckCircle size={16} color={it.color}/>}
-              </button>
-            );
-          })}
+          {ISSUE_TYPES.map(it=>(
+            <button key={it.id} onClick={()=>setIssueType(it.id)} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:issueType===it.id?it.bg:"#fff",border:`2px solid ${issueType===it.id?it.color:"#e5e7eb"}`,borderRadius:12,cursor:"pointer",transition:"all .2s"}}>
+              <div style={{width:34,height:34,borderRadius:9,background:issueType===it.id?it.color+"20":"#f3f4f6",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <it.icon size={16} color={issueType===it.id?it.color:"#9ca3af"}/>
+              </div>
+              <div style={{flex:1}}>
+                <p style={{color:"#1a1a2e",fontWeight:700,fontSize:13}}>{it.label}</p>
+                <p style={{color:"#9ca3af",fontSize:11,marginTop:2}}>Response: {getResponseTime(subCat)}h · Resolution confirmed by technician</p>
+              </div>
+              {issueType===it.id&&<CheckCircle size={16} color={it.color}/>}
+            </button>
+          ))}
         </div>
       </>)}
-
-      {/* OLA Response Time Preview — shown as soon as subCat selected, all categories */}
       {subCat&&(
         <div className="fu2" style={{marginBottom:20}}>
           <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>Response Time Commitment</p>
@@ -912,7 +841,6 @@ function RaiseTicket({user,slaConfig,onDone}){
           </div>
         </div>
       )}
-
       {module&&(isSw?issueType:true)&&(
         <div className="fu3" style={{display:"flex",flexDirection:"column",gap:14}}>
           <div>
@@ -926,30 +854,35 @@ function RaiseTicket({user,slaConfig,onDone}){
             <label style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:6,display:"block",textTransform:"uppercase",letterSpacing:"0.5px"}}>Issue Description</label>
             <textarea style={{...INP,minHeight:100,resize:"vertical"}} placeholder="Describe the issue in detail..." value={desc} onChange={e=>setDesc(e.target.value)}/>
           </div>
-          {catDef&&(
-            <div style={{background:catDef.bg,border:`1px solid ${catDef.color}30`,borderRadius:12,padding:"12px 14px"}}>
-              <p style={{color:catDef.color,fontSize:11,fontWeight:700,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>👥 Who will attend your ticket</p>
-              <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  <span style={{background:"#f0fdf4",color:"#16a34a",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:4,border:"1px solid #bbf7d0",minWidth:24,textAlign:"center"}}>L1</span>
-                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                    {TEAM_CONFIG[mainCat]?.l1?.map(s=>(
-                      <span key={s.id} style={{background:"#fff",color:"#374151",fontSize:12,fontWeight:600,padding:"4px 10px",borderRadius:6,border:"1px solid #e5e7eb"}}>👤 {s.name}</span>
-                    ))}
+          {catDef&&teamStaff.length>0&&(()=>{
+            const l1=getL1ForTeamDisplay(mainCat);
+            const l2=getL2ForTeamDisplay(mainCat);
+            return(
+              <div style={{background:catDef.bg,border:`1px solid ${catDef.color}30`,borderRadius:12,padding:"12px 14px"}}>
+                <p style={{color:catDef.color,fontSize:11,fontWeight:700,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>👥 Who will attend your ticket</p>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <span style={{background:"#f0fdf4",color:"#16a34a",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:4,border:"1px solid #bbf7d0",minWidth:24,textAlign:"center"}}>L1</span>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                      {l1.length>0?l1.map(s=>(
+                        <span key={s.emp_id} style={{background:"#fff",color:"#374151",fontSize:12,fontWeight:600,padding:"4px 10px",borderRadius:6,border:"1px solid #e5e7eb"}}>👤 {s.name}</span>
+                      )):<span style={{color:"#9ca3af",fontSize:12}}>No L1 assigned</span>}
+                    </div>
+                    <span style={{color:"#9ca3af",fontSize:11,marginLeft:"auto"}}>First response</span>
                   </div>
-                  <span style={{color:"#9ca3af",fontSize:11,marginLeft:"auto"}}>First response</span>
-                </div>
-                <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  <span style={{background:LIGHT,color:RED,fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:4,border:`1px solid ${RED}30`,minWidth:24,textAlign:"center"}}>L2</span>
-                  <span style={{background:"#fff",color:"#374151",fontSize:12,fontWeight:600,padding:"4px 10px",borderRadius:6,border:"1px solid #e5e7eb"}}>👤 {getL2ForTeam(mainCat)}</span>
-                  <span style={{color:"#9ca3af",fontSize:11,marginLeft:"auto"}}>Escalation</span>
+                  {l2&&(
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <span style={{background:LIGHT,color:RED,fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:4,border:`1px solid ${RED}30`,minWidth:24,textAlign:"center"}}>L2</span>
+                      <span style={{background:"#fff",color:"#374151",fontSize:12,fontWeight:600,padding:"4px 10px",borderRadius:6,border:"1px solid #e5e7eb"}}>👤 {l2}</span>
+                      <span style={{color:"#9ca3af",fontSize:11,marginLeft:"auto"}}>Escalation</span>
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       )}
-
       {err&&<ErrBox msg={err}/>}
       <button onClick={submit} disabled={!canSubmit} className="fu4" style={{...BTN,marginTop:20,opacity:canSubmit?1:0.5,cursor:canSubmit?"pointer":"not-allowed"}}>
         {loading?<><Loader size={16} className="spin"/>Submitting...</>:"Submit Ticket →"}
@@ -963,7 +896,6 @@ function MyTickets({empId}){
   const [tickets,setTickets]=useState([]);
   const [loading,setLoading]=useState(true);
   const [err,setErr]=useState("");
-
   useEffect(()=>{
     (async()=>{
       try{setTickets(await sbGet("tickets",`emp_id=eq.${empId}&order=raised_at.desc`));}
@@ -971,7 +903,6 @@ function MyTickets({empId}){
       setLoading(false);
     })();
   },[empId]);
-
   return(
     <div style={{padding:20}}>
       <h2 className="fu" style={{color:"#1a1a2e",fontSize:20,fontWeight:800,marginBottom:4}}>My Tickets</h2>
@@ -998,12 +929,10 @@ function MyTickets({empId}){
                   <span style={{background:"#f3f4f6",color:"#374151",fontSize:11,padding:"2px 8px",borderRadius:6,fontWeight:600}}>{t.category}</span>
                   <PriorityBadge priority={t.priority}/>
                 </div>
-                {/* Mobile number */}
                 {t.mobile&&<div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
                   <span style={{fontSize:12,color:"#6b7280"}}>📞</span>
                   <a href={`tel:${t.mobile}`} style={{color:"#0369a1",fontSize:12,fontWeight:600,textDecoration:"none"}}>{t.mobile}</a>
                 </div>}
-                {/* OLA times */}
                 <div style={{display:"flex",gap:8,marginBottom:8,flexWrap:"wrap"}}>
                   <span style={{background:"#eff6ff",color:"#0369a1",fontSize:11,padding:"3px 10px",borderRadius:6,fontWeight:600}}>⚡ Response: {getResponseTime(t.category)}h</span>
                   {t.priority?
@@ -1045,11 +974,7 @@ function TechnicianApp({user,onLogout,notifProps}){
 
   useEffect(()=>{load();},[load]);
 
-  const filtered=tickets.filter(t=>{
-    if(filter==="All")return true;
-    return t.status===filter;
-  });
-
+  const filtered=tickets.filter(t=>filter==="All"?true:t.status===filter);
   const unassigned=filtered.filter(t=>!t.assigned_to||t.assigned_to==="");
   const assigned=filtered.filter(t=>t.assigned_to&&t.assigned_to!=="");
   const showTickets=[...unassigned,...assigned];
@@ -1057,13 +982,10 @@ function TechnicianApp({user,onLogout,notifProps}){
   const breached=tickets.filter(t=>isSlaBreached(t)).length;
   const open=tickets.filter(t=>t.status==="Open"||t.status==="In Progress").length;
 
-  if(selected){
-    return <TechTicketDetail ticketId={selected} tickets={tickets} user={user} onBack={()=>{setSelected(null);load();}} teamCat={teamCat}/>;
-  }
+  if(selected) return <TechTicketDetail ticketId={selected} tickets={tickets} user={user} onBack={()=>{setSelected(null);load();}} teamCat={teamCat}/>;
 
   return(
     <div style={{minHeight:"100vh",background:"#f5f6fa",maxWidth:480,margin:"0 auto",width:"100%"}}>
-      {/* Header */}
       <div style={{background:"#fff",borderBottom:"1px solid #e5e7eb",boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
         <div style={{height:4,background:`linear-gradient(90deg,${RED},${DARK})`}}/>
         <div style={{padding:"12px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -1080,7 +1002,6 @@ function TechnicianApp({user,onLogout,notifProps}){
             <button onClick={onLogout} style={{background:"#f3f4f6",border:"1px solid #e5e7eb",borderRadius:8,padding:"6px 10px",cursor:"pointer",color:"#6b7280",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><LogOut size={14}/>Out</button>
           </div>
         </div>
-        {/* Summary pills */}
         <div style={{display:"flex",gap:8,padding:"0 20px 12px"}}>
           {[["Open",open,"#d97706","#fffbeb"],["Breached",breached,RED,LIGHT],["Total",tickets.length,"#374151","#f9fafb"]].map(([l,v,c,bg])=>(
             <div key={l} style={{background:bg,border:`1px solid ${c}20`,borderRadius:8,padding:"6px 12px",textAlign:"center",flex:1}}>
@@ -1089,15 +1010,12 @@ function TechnicianApp({user,onLogout,notifProps}){
             </div>
           ))}
         </div>
-        {/* Status filter */}
         <div style={{display:"flex",gap:6,padding:"0 20px 12px",overflowX:"auto"}}>
           {["Open","In Progress","Resolved","All"].map(s=>(
             <button key={s} onClick={()=>setFilter(s)} style={{padding:"6px 14px",borderRadius:20,border:`1.5px solid ${filter===s?RED:"#e5e7eb"}`,background:filter===s?LIGHT:"#fff",color:filter===s?RED:"#6b7280",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>{s}</button>
           ))}
         </div>
       </div>
-
-      {/* Ticket list */}
       <div style={{padding:"16px 16px 80px"}}>
         {loading?<Spinner/>:err?<ErrBox msg={err}/>:showTickets.length===0?(
           <div style={{textAlign:"center",padding:"48px 0"}}>
@@ -1109,13 +1027,24 @@ function TechnicianApp({user,onLogout,notifProps}){
             {showTickets.map((t,i)=>{
               const breachedT=isSlaBreached(t);
               const ismine=t.assigned_to===user.name;
+              const isAssignedToOther=t.assigned_to&&t.assigned_to!==""&&!ismine;
               return(
                 <div key={t.id} onClick={()=>setSelected(t.id)} className="si" style={{animationDelay:`${i*.04}s`,background:breachedT?"#fff5f5":"#fff",border:`1.5px solid ${breachedT?"#fca5a5":ismine?"#bfdbfe":"#e5e7eb"}`,borderRadius:14,padding:16,cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
                     <span style={{color:RED,fontSize:12,fontWeight:800}}>{t.id}</span>
                     <StatusBadge status={t.status}/>
                   </div>
-                  {!ismine&&user.level==="L1"&&<div style={{background:"#fef9c3",border:"1px solid #fde047",borderRadius:6,padding:"3px 8px",marginBottom:6,display:"inline-block"}}><span style={{color:"#a16207",fontSize:11,fontWeight:700}}>⚡ Unassigned</span></div>}
+                  {/* FIX 1: Show correct badge based on assignment state */}
+                  {user.level==="L1"&&(
+                    !t.assigned_to||t.assigned_to===""
+                      ? <div style={{background:"#fef9c3",border:"1px solid #fde047",borderRadius:6,padding:"3px 8px",marginBottom:6,display:"inline-block"}}>
+                          <span style={{color:"#a16207",fontSize:11,fontWeight:700}}>⚡ Unassigned — Tap to Accept</span>
+                        </div>
+                      : isAssignedToOther&&
+                        <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:6,padding:"3px 8px",marginBottom:6,display:"inline-block"}}>
+                          <span style={{color:"#0369a1",fontSize:11,fontWeight:700}}>👤 Assigned to {t.assigned_to}</span>
+                        </div>
+                  )}
                   <p style={{color:"#1a1a2e",fontSize:13,fontWeight:500,marginBottom:8,lineHeight:1.4}}>{t.description?.substring(0,70)}{t.description?.length>70?"…":""}</p>
                   <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:6}}>
                     <span style={{background:"#f3f4f6",color:"#374151",fontSize:11,padding:"2px 8px",borderRadius:6,fontWeight:600}}>{t.category}</span>
@@ -1144,8 +1073,18 @@ function TechTicketDetail({ticketId,tickets,user,onBack,teamCat}){
   const [saving,setSaving]=useState(false);
   const [note,setNote]=useState(t?.note||"");
   const [localT,setLocalT]=useState(t);
+  const [teamStaff,setTeamStaff]=useState([]);
+
+  useEffect(()=>{
+    getAllStaffFromDB().then(rows=>setTeamStaff(rows));
+  },[]);
 
   if(!localT){onBack();return null;}
+
+  const isAssignedToMe=localT.assigned_to===user.name;
+  // FIX 1: Only show Accept if truly unassigned
+  const isUnassigned=!localT.assigned_to||localT.assigned_to==="";
+  const isAssignedToOther=localT.assigned_to&&localT.assigned_to!==""&&!isAssignedToMe;
 
   async function updateField(field,value){
     setSaving(true);
@@ -1160,9 +1099,7 @@ function TechTicketDetail({ticketId,tickets,user,onBack,teamCat}){
     setSaving(false);
   }
 
-  async function acceptTicket(){
-    await updateField("assigned_to",user.name);
-  }
+  async function acceptTicket(){ await updateField("assigned_to",user.name); }
 
   async function saveNote(){
     setSaving(true);
@@ -1174,16 +1111,15 @@ function TechTicketDetail({ticketId,tickets,user,onBack,teamCat}){
   }
 
   async function escalateToL2(){
-    // Find L2 for this team
-    const l2=TEAM_CONFIG[localT.software]?.l2?.[0];
-    if(!l2)return;
+    const teamMap={"software":"Software","hardware":"Hardware & Ops","network":"Network"};
+    const dbLabel=teamMap[localT.software]||localT.software;
+    const l2=teamStaff.find(s=>s.team===dbLabel&&s.level==="L2");
+    if(!l2){alert("No L2 found for this team.");return;}
     await updateField("assigned_to",l2.name);
     alert(`Ticket escalated to L2: ${l2.name}`);
   }
 
   const breachedT=isSlaBreached(localT);
-  const isAssignedToMe=localT.assigned_to===user.name;
-  const ola=getOlaTimes(localT.software,localT.priority);
 
   return(
     <div style={{minHeight:"100vh",background:"#f5f6fa",maxWidth:480,margin:"0 auto",paddingBottom:40}}>
@@ -1197,10 +1133,9 @@ function TechTicketDetail({ticketId,tickets,user,onBack,teamCat}){
           <StatusBadge status={localT.status}/>
         </div>
       </div>
-
       <div style={{padding:16,display:"flex",flexDirection:"column",gap:12}}>
-        {/* Accept / Escalate */}
-        {!isAssignedToMe&&(
+        {/* FIX 1: Accept banner only when truly unassigned */}
+        {isUnassigned&&(
           <div style={{background:"#fef9c3",border:"1.5px solid #fde047",borderRadius:14,padding:14,display:"flex",gap:10}}>
             <div style={{flex:1}}>
               <p style={{color:"#a16207",fontWeight:700,fontSize:13}}>⚡ Unassigned Ticket</p>
@@ -1209,11 +1144,17 @@ function TechTicketDetail({ticketId,tickets,user,onBack,teamCat}){
             <button onClick={acceptTicket} disabled={saving} style={{background:"#16a34a",border:"none",borderRadius:10,color:"#fff",fontWeight:700,fontSize:13,padding:"10px 16px",cursor:"pointer"}}>Accept</button>
           </div>
         )}
-
-        {/* Breached alert */}
+        {/* FIX 1: Show assigned-to-other banner */}
+        {isAssignedToOther&&(
+          <div style={{background:"#eff6ff",border:"1.5px solid #bfdbfe",borderRadius:14,padding:14,display:"flex",alignItems:"center",gap:10}}>
+            <User size={18} color="#0369a1"/>
+            <div>
+              <p style={{color:"#0369a1",fontWeight:700,fontSize:13}}>Currently assigned to {localT.assigned_to}</p>
+              <p style={{color:"#6b7280",fontSize:12,marginTop:2}}>You can view this ticket but cannot accept it</p>
+            </div>
+          </div>
+        )}
         {breachedT&&<div style={{background:"#fff0f0",border:"1.5px solid #fca5a5",borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:8}}><AlertTriangle size={16} color={RED}/><span style={{color:RED,fontSize:13,fontWeight:700}}>OLA BREACHED — {timeLeft(localT.sla_deadline)}</span></div>}
-
-        {/* User info */}
         <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
           <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:12,textTransform:"uppercase",letterSpacing:"0.5px"}}>Caller Details</p>
           {[["Name",localT.user_name],["Department",localT.dept],["Mobile",localT.mobile||"—"],["Category",MAIN_CATEGORIES[localT.software]?.label],["Sub-Category",localT.category],["Issue",localT.module],["Raised At",fmt(localT.raised_at)]].map(([k,v])=>(
@@ -1224,8 +1165,6 @@ function TechTicketDetail({ticketId,tickets,user,onBack,teamCat}){
           ))}
           <p style={{color:"#1a1a2e",fontSize:13,lineHeight:1.5,marginTop:10,padding:"8px",background:"#f9fafb",borderRadius:8}}>{localT.description}</p>
         </div>
-
-        {/* OLA Times */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:12,padding:"12px",textAlign:"center"}}>
             <p style={{color:"#0369a1",fontSize:11,fontWeight:700,marginBottom:4}}>⚡ Response Time</p>
@@ -1236,27 +1175,21 @@ function TechTicketDetail({ticketId,tickets,user,onBack,teamCat}){
             <p style={{color:"#16a34a",fontSize:22,fontWeight:800}}>{getResolutionTime(localT.software,localT.priority)}h</p>
           </div>
         </div>
-
-        {/* Priority — all technicians */}
-        {(
-          <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
-            <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.5px"}}>Set Priority</p>
-            <p style={{color:"#9ca3af",fontSize:11,marginBottom:10}}>Sets resolution time commitment</p>
-            <div style={{display:"flex",gap:8}}>
-              {PRIORITIES.map(p=>{
-                const pc={Critical:RED,High:"#dc2626",Medium:"#d97706",Low:"#16a34a"};
-                return(
-                  <button key={p} onClick={()=>updateField("priority",p)} disabled={saving} style={{flex:1,padding:"8px 2px",borderRadius:8,border:`2px solid ${localT.priority===p?pc[p]:"#e5e7eb"}`,background:localT.priority===p?pc[p]+"15":"#fff",color:localT.priority===p?pc[p]:"#6b7280",fontSize:11,fontWeight:700,cursor:"pointer"}}>
-                    <p>{p}</p>
-                    <p style={{fontSize:9,marginTop:1,color:localT.priority===p?pc[p]:"#9ca3af"}}>{getResolutionTime(localT.software,p)}h</p>
-                  </button>
-                );
-              })}
-            </div>
+        <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+          <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.5px"}}>Set Priority</p>
+          <p style={{color:"#9ca3af",fontSize:11,marginBottom:10}}>Sets resolution time commitment</p>
+          <div style={{display:"flex",gap:8}}>
+            {PRIORITIES.map(p=>{
+              const pc={Critical:RED,High:"#dc2626",Medium:"#d97706",Low:"#16a34a"};
+              return(
+                <button key={p} onClick={()=>updateField("priority",p)} disabled={saving} style={{flex:1,padding:"8px 2px",borderRadius:8,border:`2px solid ${localT.priority===p?pc[p]:"#e5e7eb"}`,background:localT.priority===p?pc[p]+"15":"#fff",color:localT.priority===p?pc[p]:"#6b7280",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                  <p>{p}</p>
+                  <p style={{fontSize:9,marginTop:1,color:localT.priority===p?pc[p]:"#9ca3af"}}>{getResolutionTime(localT.software,p)}h</p>
+                </button>
+              );
+            })}
           </div>
-        )}
-
-        {/* Status update */}
+        </div>
         <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
           <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:12,textTransform:"uppercase",letterSpacing:"0.5px"}}>Update Status</p>
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
@@ -1265,15 +1198,11 @@ function TechTicketDetail({ticketId,tickets,user,onBack,teamCat}){
             ))}
           </div>
         </div>
-
-        {/* Escalate to L2 — L1 only */}
         {user.level==="L1"&&isAssignedToMe&&localT.status!=="Resolved"&&(
           <button onClick={escalateToL2} disabled={saving} style={{padding:"12px",borderRadius:12,border:`2px solid ${RED}`,background:LIGHT,color:RED,fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-            <AlertTriangle size={16}/>Escalate to L2 — {TEAM_CONFIG[localT.software]?.l2?.[0]?.name}
+            <AlertTriangle size={16}/>Escalate to L2
           </button>
         )}
-
-        {/* Note */}
         <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
           <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>Work Notes</p>
           {localT.note&&<p style={{color:"#374151",fontSize:13,marginBottom:10,padding:"8px",background:"#f0fdf4",borderRadius:8,borderLeft:"3px solid #16a34a"}}>{localT.note}</p>}
@@ -1293,7 +1222,6 @@ function UserApp({user,slaConfig,onLogout,notifProps}){
   const NAV=[["raise",Plus,"Raise Ticket"],["mine",Ticket,"My Tickets"]];
   return(
     <div className="user-shell" style={{minHeight:"100vh",background:"#f5f6fa",display:"flex",flexDirection:"column",width:"100%"}}>
-      {/* Desktop sidebar - hidden on mobile via CSS */}
       <div className="user-sidebar" style={{display:"none",background:"#fff",borderRight:"1px solid #e5e7eb",flexDirection:"column",height:"100vh",position:"sticky",top:0,zIndex:20}}>
         <div style={{padding:"16px 20px",borderBottom:"1px solid #e5e7eb"}}>
           <img src="/abmh-logo-1.png" alt="ABMH" style={{height:36,objectFit:"contain",maxWidth:"100%"}}/>
@@ -1315,9 +1243,7 @@ function UserApp({user,slaConfig,onLogout,notifProps}){
           </button>
         </div>
       </div>
-      {/* Main area */}
       <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0}}>
-        {/* Top bar */}
         <div className="user-topbar" style={{position:"fixed",top:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,zIndex:10}}>
           <div style={{height:4,background:`linear-gradient(90deg,${RED},${DARK})`}}/>
           <div style={{background:"#fff",borderBottom:"1px solid #e5e7eb",padding:"12px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
@@ -1337,7 +1263,6 @@ function UserApp({user,slaConfig,onLogout,notifProps}){
         <div className="user-content" style={{flex:1,overflowY:"auto",paddingTop:84,paddingBottom:90}}>
           {tab==="raise"?<RaiseTicket user={user} slaConfig={slaConfig} onDone={()=>setTab("mine")}/>:<MyTickets empId={user.empId}/>}
         </div>
-        {/* Mobile bottom nav */}
         <div className="user-bottom-nav" style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:"#fff",borderTop:"1px solid #e5e7eb",display:"flex",boxShadow:"0 -2px 8px rgba(0,0,0,0.06)"}}>
           {NAV.map(([id,Icon,label])=>(
             <button key={id} onClick={()=>setTab(id)} style={{flex:1,padding:"12px 0 8px",background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
@@ -1358,6 +1283,7 @@ function TicketDetail({ticketId,tickets,onBack,onUpdate}){
   const [saving,setSaving]=useState(false);
   const [audit,setAudit]=useState([]);
   const [loadingAudit,setLoadingAudit]=useState(true);
+  const [teamStaff,setTeamStaff]=useState([]);
 
   useEffect(()=>{
     (async()=>{
@@ -1365,18 +1291,15 @@ function TicketDetail({ticketId,tickets,onBack,onUpdate}){
       catch(e){}
       setLoadingAudit(false);
     })();
+    getAllStaffFromDB().then(setTeamStaff);
   },[ticketId]);
 
   if(!t){onBack();return null;}
   const cat=MAIN_CATEGORIES[t.software];
   const breachedT=isSlaBreached(t);
-
-  // Build assignee list from ticket's team — all L1 + L2 for that category
-  const ticketTeam=t.software||"software";
-  const teamStaff=[
-    ...(TEAM_CONFIG[ticketTeam]?.l1||[]).map(s=>({...s,level:"L1"})),
-    ...(TEAM_CONFIG[ticketTeam]?.l2||[]).map(s=>({...s,level:"L2"})),
-  ];
+  const teamMap={"software":"Software","hardware":"Hardware & Ops","network":"Network"};
+  const dbLabel=teamMap[t.software]||t.software;
+  const ticketTeamStaff=teamStaff.filter(s=>s.team===dbLabel);
 
   async function updateField(field,value){
     setSaving(true);
@@ -1421,54 +1344,47 @@ function TicketDetail({ticketId,tickets,onBack,onUpdate}){
           </div>
         ))}
       </div>
-
-      {/* Priority — set by technician */}
       <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
         <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.5px"}}>Set Priority</p>
-        <p style={{color:"#9ca3af",fontSize:11,marginBottom:12}}>Technician confirms priority · OLA times update automatically</p>
         <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
           {PRIORITIES.map(p=>{
             const pc={Critical:RED,High:"#dc2626",Medium:"#d97706",Low:"#16a34a"};
             return(
-              <button key={p} onClick={()=>updateField("priority",p)} disabled={saving} style={{flex:1,padding:"8px 4px",borderRadius:8,border:`2px solid ${t.priority===p?pc[p]:"#e5e7eb"}`,background:t.priority===p?pc[p]+"15":"#fff",color:t.priority===p?pc[p]:"#6b7280",fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .2s",minWidth:70}}>
+              <button key={p} onClick={()=>updateField("priority",p)} disabled={saving} style={{flex:1,padding:"8px 4px",borderRadius:8,border:`2px solid ${t.priority===p?pc[p]:"#e5e7eb"}`,background:t.priority===p?pc[p]+"15":"#fff",color:t.priority===p?pc[p]:"#6b7280",fontSize:12,fontWeight:700,cursor:"pointer",minWidth:70}}>
                 <p>{p}</p>
-                <p style={{fontSize:10,fontWeight:500,marginTop:2,color:t.priority===p?pc[p]:"#9ca3af"}}>Res: {getResolutionTime(t.software,p)}h</p>
+                <p style={{fontSize:10,fontWeight:500,marginTop:2}}>{getResolutionTime(t.software,p)}h</p>
               </button>
             );
           })}
         </div>
-        {/* OLA display for current priority */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
           <div style={{background:"#eff6ff",borderRadius:8,padding:"10px",textAlign:"center"}}>
             <p style={{color:"#0369a1",fontSize:10,fontWeight:700}}>⚡ Response Time</p>
             <p style={{color:"#0369a1",fontSize:22,fontWeight:800}}>{getResponseTime(t.category)}h</p>
-            <p style={{color:"#93c5fd",fontSize:10,marginTop:2}}>based on sub-category</p>
           </div>
           <div style={{background:"#f0fdf4",borderRadius:8,padding:"10px",textAlign:"center"}}>
             <p style={{color:"#16a34a",fontSize:10,fontWeight:700}}>✅ Resolution Time</p>
             <p style={{color:"#16a34a",fontSize:22,fontWeight:800}}>{getResolutionTime(t.software,t.priority)}h</p>
-            <p style={{color:"#86efac",fontSize:10,marginTop:2}}>based on {t.priority} priority</p>
           </div>
         </div>
       </div>
-
-      {/* Reassign */}
+      {/* Reassign — from DB staff */}
       <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
         <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:12,textTransform:"uppercase",letterSpacing:"0.5px"}}>Assign To</p>
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {["L1","L2"].map(lvl=>{
-            const group=teamStaff.filter(s=>s.level===lvl);
+            const group=ticketTeamStaff.filter(s=>s.level===lvl);
             if(!group.length)return null;
             return(
               <div key={lvl}>
                 <p style={{color:"#9ca3af",fontSize:11,fontWeight:700,marginBottom:6}}>{lvl} — {lvl==="L1"?"First Response":"Technical"}</p>
                 <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                   {group.map(s=>(
-                    <button key={s.id} onClick={()=>updateField("assigned_to",s.name)} disabled={saving}
+                    <button key={s.emp_id} onClick={()=>updateField("assigned_to",s.name)} disabled={saving}
                       style={{padding:"8px 14px",borderRadius:8,border:`2px solid ${t.assigned_to===s.name?lvl==="L2"?RED:"#16a34a":"#e5e7eb"}`,
                         background:t.assigned_to===s.name?lvl==="L2"?LIGHT:"#f0fdf4":"#fff",
                         color:t.assigned_to===s.name?lvl==="L2"?RED:"#16a34a":"#6b7280",
-                        fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .2s"}}>
+                        fontSize:12,fontWeight:700,cursor:"pointer"}}>
                       {s.name}{t.assigned_to===s.name?" ✓":""}
                     </button>
                   ))}
@@ -1478,18 +1394,14 @@ function TicketDetail({ticketId,tickets,onBack,onUpdate}){
           })}
         </div>
       </div>
-
-      {/* Status */}
       <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
         <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:12,textTransform:"uppercase",letterSpacing:"0.5px"}}>Update Status</p>
         <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
           {STATUSES.map(s=>(
-            <button key={s} onClick={()=>updateField("status",s)} disabled={saving} style={{padding:"8px 16px",borderRadius:8,border:`2px solid ${t.status===s?RED:"#e5e7eb"}`,background:t.status===s?LIGHT:"#fff",color:t.status===s?RED:"#6b7280",fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .2s"}}>{s}</button>
+            <button key={s} onClick={()=>updateField("status",s)} disabled={saving} style={{padding:"8px 16px",borderRadius:8,border:`2px solid ${t.status===s?RED:"#e5e7eb"}`,background:t.status===s?LIGHT:"#fff",color:t.status===s?RED:"#6b7280",fontSize:12,fontWeight:700,cursor:"pointer"}}>{s}</button>
           ))}
         </div>
       </div>
-
-      {/* Note */}
       <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
         <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>Internal Note</p>
         {t.note&&<p style={{color:"#374151",fontSize:13,marginBottom:10,padding:"8px 10px",background:"#f0fdf4",borderRadius:8,borderLeft:"3px solid #16a34a"}}>{t.note}</p>}
@@ -1498,8 +1410,6 @@ function TicketDetail({ticketId,tickets,onBack,onUpdate}){
           {saving?<><Loader size={14} className="spin"/>Saving...</>:<><Save size={14}/>Save Note</>}
         </button>
       </div>
-
-      {/* Audit */}
       <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
         <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:12,textTransform:"uppercase",letterSpacing:"0.5px"}}>Audit Trail</p>
         {loadingAudit?<Spinner size={20}/>:audit.length===0?<p style={{color:"#9ca3af",fontSize:13}}>No audit records yet.</p>:(
@@ -1528,6 +1438,8 @@ function TicketDetail({ticketId,tickets,onBack,onUpdate}){
 // ─── Reports ──────────────────────────────────────────────────────────────────
 function Reports({tickets}){
   const [dateRange,setDateRange]=useState({start:new Date(Date.now()-7*86400000),end:new Date()});
+  const [allStaff,setAllStaff]=useState([]);
+  useEffect(()=>{getAllStaffFromDB().then(setAllStaff);},[]);
 
   const filtered=tickets.filter(t=>{
     const d=new Date(t.raised_at);
@@ -1537,39 +1449,34 @@ function Reports({tickets}){
   });
 
   const total=filtered.length;
-  const resolved=filtered.filter(t=>t.status==="Resolved"||false).length;
+  const resolved=filtered.filter(t=>t.status==="Resolved").length;
   const resolvedInTat=filtered.filter(t=>isWithinOla(t)).length;
   const breached=filtered.filter(t=>isSlaBreached(t)).length;
   const avgRes=resolved>0?Math.round(filtered.filter(t=>t.resolved_at).reduce((a,t)=>a+(new Date(t.resolved_at)-new Date(t.raised_at))/3600000,0)/resolved):0;
   const slaCompliance=pct(resolvedInTat,resolved||1);
   const resolutionRate=pct(resolved,total||1);
 
-  // By main category
   const byCat=Object.entries(MAIN_CATEGORIES).map(([key,cat])=>{
     const catTickets=filtered.filter(t=>t.software===key);
-    const catResolved=catTickets.filter(t=>t.status==="Resolved"||false).length;
+    const catResolved=catTickets.filter(t=>t.status==="Resolved").length;
     const catInTat=catTickets.filter(t=>isWithinOla(t)).length;
     return{key,label:cat.label,color:cat.color,bg:cat.bg,count:catTickets.length,resolved:catResolved,inTat:catInTat,compliance:catResolved>0?pct(catInTat,catResolved):null};
   });
 
-  // By assignee
-  const assignees=[...new Set(getAllStaff().map(s=>s.name))];
-  const byAssignee=assignees.map(a=>{
+  const staffNames=[...new Set(allStaff.map(s=>s.name))];
+  const byAssignee=staffNames.map(a=>{
     const at=filtered.filter(t=>t.assigned_to===a);
-    const ar=at.filter(t=>t.status==="Resolved"||false).length;
+    const ar=at.filter(t=>t.status==="Resolved").length;
     const ai=at.filter(t=>isWithinOla(t)).length;
     return{name:a,total:at.length,resolved:ar,inTat:ai,compliance:ar>0?pct(ai,ar):null};
   });
 
-  // By priority
   const byPriority=PRIORITIES.map(p=>{
     const pt=filtered.filter(t=>t.priority===p);
-    const pr=pt.filter(t=>t.status==="Resolved"||false).length;
+    const pr=pt.filter(t=>t.status==="Resolved").length;
     const pi=pt.filter(t=>isWithinOla(t)).length;
     return{priority:p,total:pt.length,resolved:pr,inTat:pi,compliance:pr>0?pct(pi,pr):null};
   });
-
-  
 
   function complianceColor(pct){return pct>=90?"#16a34a":pct>=70?"#d97706":"#dc2626";}
 
@@ -1601,7 +1508,7 @@ function Reports({tickets}){
       .green{color:#16a34a;font-weight:700;} .orange{color:#d97706;font-weight:700;} .red{color:#dc2626;font-weight:700;}
     </style></head><body>
       <h1>ABMH IT HelpDesk — Ticket Report</h1>
-      <p style="color:#6b7280">Period: ${dateRange.start?fmtDate(dateRange.start.toISOString()):"All"} to ${dateRange.end?fmtDate(dateRange.end.toISOString()):"Today"} &nbsp;|&nbsp; Generated: ${new Date().toLocaleString("en-IN")}</p>
+      <p style="color:#6b7280">Period: ${dateRange.start?fmtDate(dateRange.start.toISOString()):"All"} to ${dateRange.end?fmtDate(dateRange.end.toISOString()):"Today"} | Generated: ${new Date().toLocaleString("en-IN")}</p>
       <div class="summary">
         <div class="card"><div class="num">${total}</div><div class="lbl">Total Tickets</div></div>
         <div class="card"><div class="num">${resolved}</div><div class="lbl">Resolved</div></div>
@@ -1609,10 +1516,6 @@ function Reports({tickets}){
         <div class="card"><div class="num">${avgRes}h</div><div class="lbl">Avg Resolution</div></div>
         <div class="card"><div class="num" style="color:#dc2626">${breached}</div><div class="lbl">OLA Breached</div></div>
       </div>
-      <h2 style="color:#374151;font-size:14px;margin:16px 0 8px">Team Performance</h2>
-      <table><tr><th>Assignee</th><th>Total</th><th>Resolved</th><th>Within OLA</th><th>SLA %</th></tr>
-        ${byAssignee.map(a=>`<tr><td>${a.name}</td><td>${a.total}</td><td>${a.resolved}</td><td>${a.inTat}</td><td class="${a.compliance>=90?"green":a.compliance>=70?"orange":"red"}">${a.compliance}%</td></tr>`).join("")}
-      </table>
       <h2 style="color:#374151;font-size:14px;margin:16px 0 8px">All Tickets</h2>
       <table><tr><th>Ticket ID</th><th>Raised By</th><th>Category</th><th>Sub-Cat</th><th>Priority</th><th>Status</th><th>Assigned To</th><th>Within OLA</th></tr>
         ${filtered.map(t=>`<tr><td>${t.id}</td><td>${t.user_name}</td><td>${MAIN_CATEGORIES[t.software]?.label||t.software}</td><td>${t.category}</td><td>${t.priority}</td><td>${t.status}</td><td>${t.assigned_to||"—"}</td><td>${(!t.resolved_at||new Date(t.resolved_at)<=new Date(t.sla_deadline))?"✅ Yes":"❌ No"}</td></tr>`).join("")}
@@ -1625,155 +1528,18 @@ function Reports({tickets}){
     <div style={{padding:20}}>
       <h2 className="fu" style={{color:"#1a1a2e",fontSize:20,fontWeight:800,marginBottom:4}}>Reports & Analytics</h2>
       <p className="fu1" style={{color:"#6b7280",fontSize:13,marginBottom:16}}>OLA compliance, Response & Resolution time metrics</p>
-
-      {/* Date Range Picker */}
       <div className="fu1" style={{marginBottom:20}}>
         <label style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:8,display:"block",textTransform:"uppercase",letterSpacing:"0.5px"}}>Date Range</label>
         <DateRangePicker startDate={dateRange.start} endDate={dateRange.end} onChange={({start,end})=>setDateRange({start,end})}/>
       </div>
-
-      {/* KPI Summary cards */}
       <div className="fu2" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
-        {[
-          {label:"Total Tickets",val:total,color:RED},
-          {label:"Resolved",val:resolved,color:"#16a34a"},
-          {label:"OLA Compliance",val:slaCompliance===null?"N/A":`${slaCompliance}%`,color:slaCompliance===null?"#9ca3af":complianceColor(slaCompliance)},
-          {label:"Avg Resolution",val:`${avgRes}h`,color:"#0369a1"},
-          {label:"Within OLA",val:resolvedInTat,color:"#16a34a"},
-          {label:"OLA Breached",val:breached,color:"#dc2626"},
-        ].map((s,i)=>(
+        {[{label:"Total Tickets",val:total,color:RED},{label:"Resolved",val:resolved,color:"#16a34a"},{label:"OLA Compliance",val:`${slaCompliance}%`,color:complianceColor(slaCompliance)},{label:"Avg Resolution",val:`${avgRes}h`,color:"#0369a1"},{label:"Within OLA",val:resolvedInTat,color:"#16a34a"},{label:"OLA Breached",val:breached,color:"#dc2626"}].map((s,i)=>(
           <div key={s.label} className="fu" style={{animationDelay:`${i*.05}s`,background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:"14px 16px",boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
             <p style={{color:s.color,fontSize:22,fontWeight:800,lineHeight:1}}>{s.val}</p>
             <p style={{color:"#6b7280",fontSize:12,marginTop:4}}>{s.label}</p>
           </div>
         ))}
       </div>
-
-      {/* Resolution Rate bar */}
-      <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
-          <p style={{color:"#1a1a2e",fontWeight:700,fontSize:14}}>Overall Resolution Rate</p>
-          <span style={{color:complianceColor(resolutionRate),fontWeight:800,fontSize:16}}>{resolutionRate}%</span>
-        </div>
-        <div style={{height:12,background:"#f3f4f6",borderRadius:6,overflow:"hidden"}}>
-          <div style={{width:`${resolutionRate}%`,height:"100%",background:`linear-gradient(90deg,${RED},${DARK})`,borderRadius:6,transition:"width .8s"}}/>
-        </div>
-        <div style={{display:"flex",justifyContent:"space-between",marginTop:8}}>
-          <span style={{color:"#9ca3af",fontSize:11}}>{resolved} of {total} tickets resolved</span>
-          <span style={{color:slaCompliance===null?"#9ca3af":complianceColor(slaCompliance),fontSize:11,fontWeight:700}}>{slaCompliance===null?"No resolved tickets yet":slaCompliance+"% within OLA"}</span>
-        </div>
-      </div>
-
-      {/* By Category */}
-      <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:20,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
-        <p style={{color:"#1a1a2e",fontWeight:700,fontSize:14,marginBottom:4}}>By Category — OLA Compliance</p>
-        <p style={{color:"#9ca3af",fontSize:11,marginBottom:16}}>% of resolved tickets completed within committed time</p>
-        {byCat.map(c=>{
-          const pctVal=c.compliance===null?0:c.compliance;
-          const clr=c.compliance===null?"#e5e7eb":complianceColor(c.compliance);
-          return(
-            <div key={c.key} style={{marginBottom:18}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{background:c.bg,color:c.color,fontSize:11,padding:"3px 10px",borderRadius:6,fontWeight:700}}>{c.label}</span>
-                  <span style={{color:"#9ca3af",fontSize:11}}>{c.count} tickets · {c.resolved} resolved</span>
-                </div>
-                <span style={{color:c.compliance===null?"#9ca3af":clr,fontWeight:800,fontSize:15,minWidth:48,textAlign:"right"}}>{c.compliance===null?"N/A":c.compliance+"%"}</span>
-              </div>
-              {/* Full-width 0-100% bar */}
-              <div style={{height:14,background:"#f3f4f6",borderRadius:7,overflow:"hidden",position:"relative"}}>
-                <div style={{width:`${pctVal}%`,height:"100%",background:clr,borderRadius:7,transition:"width .8s",display:"flex",alignItems:"center",justifyContent:"flex-end",paddingRight:6}}>
-                  {pctVal>=15&&<span style={{color:"#fff",fontSize:10,fontWeight:700}}>{pctVal}%</span>}
-                </div>
-              </div>
-              <div style={{display:"flex",justifyContent:"space-between",marginTop:5}}>
-                <div style={{display:"flex",gap:14}}>
-                  <span style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"#9ca3af"}}><span style={{width:8,height:8,borderRadius:2,background:"#16a34a",display:"inline-block"}}/>Within OLA: {c.inTat}</span>
-                  <span style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"#9ca3af"}}><span style={{width:8,height:8,borderRadius:2,background:"#fca5a5",display:"inline-block"}}/>Breached: {c.resolved-c.inTat}</span>
-                </div>
-                {c.compliance!==null&&(
-                  <span style={{fontSize:11,fontWeight:700,color:clr}}>{c.compliance>=90?"🟢 Excellent":c.compliance>=70?"🟡 Good":"🔴 Needs Attention"}</span>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Team Performance */}
-      <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:20,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
-        <p style={{color:"#1a1a2e",fontWeight:700,fontSize:14,marginBottom:4}}>Team Performance</p>
-        <p style={{color:"#9ca3af",fontSize:11,marginBottom:16}}>OLA % = Within OLA ÷ Resolved tickets × 100</p>
-        {byAssignee.map(a=>(
-          <div key={a.name} style={{marginBottom:16,paddingBottom:16,borderBottom:"1px solid #f9fafb"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <div style={{width:32,height:32,borderRadius:"50%",background:LIGHT,border:`1.5px solid ${RED}30`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                  <User size={14} color={RED}/>
-                </div>
-                <span style={{fontWeight:700,fontSize:13,color:"#1a1a2e"}}>{a.name}</span>
-              </div>
-              <span style={{color:a.compliance===null?"#9ca3af":complianceColor(a.compliance),fontWeight:800,fontSize:15}}>{a.compliance===null?"N/A":a.compliance+"% OLA"}</span>
-            </div>
-            {/* Stats row */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
-              {[["Total",a.total,"#374151","#f9fafb"],["Resolved",a.resolved,"#16a34a","#f0fdf4"],["Within OLA",a.inTat,"#0369a1","#eff6ff"]].map(([l,v,c,bg])=>(
-                <div key={l} style={{background:bg,borderRadius:8,padding:"8px",textAlign:"center",border:`1px solid ${c}15`}}>
-                  <p style={{color:c,fontWeight:800,fontSize:18,lineHeight:1}}>{v}</p>
-                  <p style={{color:"#9ca3af",fontSize:10,marginTop:3}}>{l}</p>
-                </div>
-              ))}
-            </div>
-            {/* OLA compliance bar — always 0-100% scale */}
-            {a.compliance!==null&&(
-              <>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                  <span style={{fontSize:11,color:"#9ca3af"}}>OLA Compliance</span>
-                  <span style={{fontSize:11,fontWeight:700,color:complianceColor(a.compliance)}}>{a.compliance>=90?"🟢 Excellent":a.compliance>=70?"🟡 Good":"🔴 Needs Attention"}</span>
-                </div>
-                <div style={{height:12,background:"#f3f4f6",borderRadius:6,overflow:"hidden"}}>
-                  <div style={{width:`${a.compliance}%`,height:"100%",background:complianceColor(a.compliance),borderRadius:6,transition:"width .8s",display:"flex",alignItems:"center",justifyContent:"flex-end",paddingRight:6}}>
-                    {a.compliance>=15&&<span style={{color:"#fff",fontSize:10,fontWeight:700}}>{a.compliance}%</span>}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Priority breakdown */}
-      <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:20,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
-        <p style={{color:"#1a1a2e",fontWeight:700,fontSize:14,marginBottom:4}}>By Priority — OLA Compliance</p>
-        <p style={{color:"#9ca3af",fontSize:11,marginBottom:16}}>OLA compliance rate per ticket priority</p>
-        <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          {byPriority.map(p=>{
-            const pc={Critical:RED,High:"#dc2626",Medium:"#d97706",Low:"#16a34a"};
-            const pclr=pc[p.priority]||"#374151";
-            const compliance=p.compliance===null?0:p.compliance;
-            const bar=p.compliance===null?"#e5e7eb":complianceColor(p.compliance);
-            return(
-              <div key={p.priority} style={{display:"flex",alignItems:"center",gap:12}}>
-                <div style={{minWidth:80}}>
-                  <PriorityBadge priority={p.priority}/>
-                  <p style={{color:"#9ca3af",fontSize:10,marginTop:3}}>{p.total} tickets</p>
-                </div>
-                <div style={{flex:1}}>
-                  <div style={{height:20,background:"#f3f4f6",borderRadius:6,overflow:"hidden",position:"relative"}}>
-                    <div style={{width:`${compliance}%`,height:"100%",background:bar,borderRadius:6,transition:"width .8s",display:"flex",alignItems:"center",justifyContent:"flex-end",paddingRight:8}}>
-                      {compliance>=20&&<span style={{color:"#fff",fontSize:11,fontWeight:700}}>{compliance}%</span>}
-                    </div>
-                    {compliance<20&&p.compliance!==null&&<span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:11,fontWeight:700,color:bar}}>{compliance}%</span>}
-                  </div>
-                  <p style={{color:p.compliance===null?"#9ca3af":bar,fontSize:10,marginTop:3,fontWeight:600}}>{p.compliance===null?"No resolved tickets yet":p.resolved+" resolved · "+p.inTat+" within OLA"}</p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Download buttons */}
       <div style={{display:"flex",gap:10,marginBottom:14}}>
         <button onClick={downloadCSV} style={{flex:1,padding:"12px 0",background:"#f0fdf4",border:"1.5px solid #16a34a",borderRadius:10,color:"#16a34a",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
           <Download size={16}/> Excel (CSV)
@@ -1782,8 +1548,6 @@ function Reports({tickets}){
           <Download size={16}/> PDF / Print
         </button>
       </div>
-
-      {/* Ticket list */}
       <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
         <p style={{color:"#1a1a2e",fontWeight:700,fontSize:14,marginBottom:14}}>All Tickets ({filtered.length})</p>
         {filtered.length===0?<p style={{color:"#9ca3af",fontSize:13}}>No tickets in this period.</p>:(
@@ -1800,7 +1564,6 @@ function Reports({tickets}){
                   <div style={{textAlign:"right"}}>
                     <StatusBadge status={t.status}/>
                     <p style={{color:met?"#16a34a":"#dc2626",fontSize:11,fontWeight:600,marginTop:4}}>{met?"✓ Within OLA":"✗ Breached"}</p>
-                    {t.mobile&&<a href={`tel:${t.mobile}`} style={{color:"#0369a1",fontSize:11,fontWeight:600,textDecoration:"none",display:"block",marginTop:2}}>📞 {t.mobile}</a>}
                   </div>
                 </div>
               );
@@ -1820,9 +1583,7 @@ function SlaSettings({slaConfig,onUpdate}){
   const [local,setLocal]=useState(slaConfig);
   const [saving,setSaving]=useState(false);
   const [err,setErr]=useState("");
-
-  function verify(){if(password==="admin123"){setVerified(true);setErr("");}else setErr("Incorrect password.");}
-
+  function verify(){if(password===getAdminPassword()){setVerified(true);setErr("");}else setErr("Incorrect password.");}
   async function saveAll(){
     setSaving(true);
     try{
@@ -1833,7 +1594,6 @@ function SlaSettings({slaConfig,onUpdate}){
     }catch(e){setErr("Failed to save SLA changes.");}
     setSaving(false);
   }
-
   return(
     <div style={{padding:20}}>
       <h2 className="fu" style={{color:"#1a1a2e",fontSize:20,fontWeight:800,marginBottom:4}}>OLA Configuration</h2>
@@ -1863,7 +1623,7 @@ function SlaSettings({slaConfig,onUpdate}){
           <button onClick={()=>setEditMode(true)} style={BTN}><Edit3 size={16}/> Edit SLA Values</button>
         </>
       ):!verified?(
-        <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:20,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+        <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:20}}>
           <p style={{color:"#1a1a2e",fontWeight:700,fontSize:15,marginBottom:6}}>Admin Verification Required</p>
           <input style={{...INP,marginBottom:12}} type="password" placeholder="Admin password" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={e=>e.key==="Enter"&&verify()}/>
           {err&&<ErrBox msg={err}/>}
@@ -1872,7 +1632,6 @@ function SlaSettings({slaConfig,onUpdate}){
         </div>
       ):(
         <>
-          <p style={{color:"#9ca3af",fontSize:12,marginBottom:16}}>Note: SLA values in database will be used. If no DB record exists, defaults above apply.</p>
           {err&&<ErrBox msg={err}/>}
           <button onClick={saveAll} disabled={saving} style={BTN}>{saving?<><Loader size={16} className="spin"/>Saving...</>:<><Save size={16}/>Save SLA Changes</>}</button>
           <button onClick={()=>{setEditMode(false);setVerified(false);setPassword("");setLocal(slaConfig);}} style={{...BTN,marginTop:8,background:"#f3f4f6",color:"#1a1a2e",boxShadow:"none",border:"1.5px solid #e5e7eb"}}><X size={16}/>Cancel</button>
@@ -1883,99 +1642,92 @@ function SlaSettings({slaConfig,onUpdate}){
 }
 
 // ─── Password Manager ─────────────────────────────────────────────────────────
+// FIX 3: Passwords now saved to Supabase it_team table
 function PasswordManager(){
-  const [passwords,setPasswords]=useState(getStaffPasswords());
   const [adminPwd,setAdminPwd]=useState(getAdminPassword());
   const [editing,setEditing]=useState(null);
   const [newPwd,setNewPwd]=useState("");
   const [show,setShow]=useState({});
   const [saved,setSaved]=useState("");
-  const [pmTab,setPmTab]=useState("passwords"); // "passwords" | "team"
-  // Dynamic L1 staff stored in Supabase table: it_team
-  const [dynStaff,setDynStaff]=useState(null); // null = loading
-  const [addForm,setAddForm]=useState({team:"software",name:"",id:"",password:""});
+  const [pmTab,setPmTab]=useState("passwords");
+  const [dynStaff,setDynStaff]=useState(null);
+  const [addForm,setAddForm]=useState({team:"Software",name:"",emp_id:"",password:""});
   const [addErr,setAddErr]=useState("");
   const [teamSaved,setTeamSaved]=useState("");
+  const [saving,setSaving]=useState(false);
 
   useEffect(()=>{ loadDynStaff(); },[]);
 
   async function loadDynStaff(){
     try{
       const rows=await sbGet("it_team","order=team.asc,level.asc,name.asc");
-      setDynStaff(rows);
+      setDynStaff(rows||[]);
     }catch(e){ setDynStaff([]); }
   }
 
-  // Merge static TEAM_CONFIG with dynamic overrides from DB
-  function getEffectiveTeam(){
-    if(!dynStaff) return TEAM_CONFIG;
-    const merged={};
-    Object.keys(TEAM_CONFIG).forEach(team=>{
-      const dbL1=dynStaff.filter(s=>s.team===team&&s.level==="L1");
-      merged[team]={
-        ...TEAM_CONFIG[team],
-        l1: dbL1.length>0 ? dbL1 : TEAM_CONFIG[team].l1,
-      };
-    });
-    return merged;
+  // FIX 3: Save password to Supabase instead of localStorage
+  async function saveChange(){
+    if(!newPwd||newPwd.length<4){alert("Password must be at least 4 characters.");return;}
+    setSaving(true);
+    if(editing==="admin"){
+      saveAdminPassword(newPwd);
+      setAdminPwd(newPwd);
+      setSaved("admin");
+    } else {
+      try{
+        // Save directly to Supabase it_team table using emp_id
+        await sbPatch("it_team",`emp_id=eq.${encodeURIComponent(editing)}`,{password:newPwd});
+        setSaved(editing);
+        await loadDynStaff(); // Refresh staff list
+      }catch(e){
+        alert("Failed to save password to database. Please try again.");
+        setSaving(false);
+        return;
+      }
+    }
+    setEditing(null);setNewPwd("");
+    setTimeout(()=>setSaved(""),3000);
+    setSaving(false);
   }
 
-  async function addL1Member(){
+  async function addMember(){
     setAddErr("");
-    if(!addForm.name.trim()||!addForm.id.trim()||!addForm.password.trim()){setAddErr("All fields required.");return;}
+    if(!addForm.name.trim()||!addForm.emp_id.trim()||!addForm.password.trim()){setAddErr("All fields required.");return;}
     if(addForm.password.length<4){setAddErr("Password min 4 chars.");return;}
     try{
-      await sbPost("it_team",{team:addForm.team,level:"L1",name:addForm.name.trim(),id:addForm.id.trim(),password:addForm.password.trim()});
-      setAddForm({team:"software",name:"",id:"",password:""});
+      await sbPost("it_team",{team:addForm.team,level:"L1",name:addForm.name.trim(),emp_id:addForm.emp_id.trim(),password:addForm.password.trim()});
+      setAddForm({team:"Software",name:"",emp_id:"",password:""});
       setTeamSaved("Member added!");
       setTimeout(()=>setTeamSaved(""),3000);
       await loadDynStaff();
     }catch(e){setAddErr("Failed to save. Check it_team table exists.");}
   }
 
-  async function deleteL1Member(rowId){
-    if(!window.confirm("Remove this L1 member?"))return;
+  async function deleteMember(empId){
+    if(!window.confirm("Remove this member?"))return;
     try{
-      await fetch(`${API}/it_team?id=eq.${rowId}`,{method:"DELETE",headers:{...HEADERS,"Prefer":"return=minimal"}});
+      await fetch(`${API}/it_team?emp_id=eq.${encodeURIComponent(empId)}`,{method:"DELETE",headers:H({"Prefer":"return=minimal"})});
       setTeamSaved("Member removed!");
       setTimeout(()=>setTeamSaved(""),3000);
       await loadDynStaff();
     }catch(e){alert("Delete failed.");}
   }
 
-  function saveChange(){
-    if(!newPwd||newPwd.length<4){alert("Password must be at least 4 characters.");return;}
-    if(editing==="admin"){
-      saveAdminPassword(newPwd);
-      setAdminPwd(newPwd);
-    } else {
-      const updated={...passwords,[editing]:newPwd};
-      saveStaffPasswords(updated);
-      setPasswords(updated);
-    }
-    setSaved(editing);
-    setEditing(null);setNewPwd("");
-    setTimeout(()=>setSaved(""),3000);
-  }
-
   const LEVEL_COLOR={L1:"#16a34a",L2:RED};
-  const TEAM_LABEL={software:"Software",hardware:"Hardware & Ops",network:"Network"};
-  const effectiveTeam=getEffectiveTeam();
+  const TEAM_LABELS=["Software","Hardware & Ops","Network"];
 
   return(
     <div style={{padding:20,maxWidth:600,margin:"0 auto"}}>
       <h2 style={{color:"#1a1a2e",fontSize:18,fontWeight:800,marginBottom:4}}>Staff & Passwords</h2>
       <p style={{color:"#6b7280",fontSize:13,marginBottom:16}}>Manage IT team members and login passwords.</p>
-
-      {/* Sub-tabs */}
       <div style={{display:"flex",gap:8,marginBottom:20,background:"#f3f4f6",borderRadius:10,padding:4}}>
         {[["passwords","🔑 Passwords"],["team","👥 Team Management"]].map(([t,l])=>(
-          <button key={t} onClick={()=>setPmTab(t)} style={{flex:1,padding:"8px 0",borderRadius:8,border:"none",background:pmTab===t?"#fff":"transparent",color:pmTab===t?"#1a1a2e":"#6b7280",fontWeight:pmTab===t?700:500,fontSize:13,cursor:"pointer",boxShadow:pmTab===t?"0 1px 4px rgba(0,0,0,0.08)":"none",transition:"all .2s"}}>{l}</button>
+          <button key={t} onClick={()=>setPmTab(t)} style={{flex:1,padding:"8px 0",borderRadius:8,border:"none",background:pmTab===t?"#fff":"transparent",color:pmTab===t?"#1a1a2e":"#6b7280",fontWeight:pmTab===t?700:500,fontSize:13,cursor:"pointer",boxShadow:pmTab===t?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>{l}</button>
         ))}
       </div>
 
       {pmTab==="passwords"&&(<>
-        {saved&&<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"10px 14px",marginBottom:16,color:"#16a34a",fontWeight:600,fontSize:13}}>✅ Password updated!</div>}
+        {saved&&<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"10px 14px",marginBottom:16,color:"#16a34a",fontWeight:600,fontSize:13}}>✅ Password updated in database!</div>}
 
         {/* Admin password */}
         <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,marginBottom:12,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
@@ -1995,52 +1747,55 @@ function PasswordManager(){
                 <input style={{...INP,paddingRight:60}} type={show["admin"]?"text":"password"} placeholder="New password" value={newPwd} onChange={e=>setNewPwd(e.target.value)} onKeyDown={e=>e.key==="Enter"&&saveChange()}/>
                 <button onClick={()=>setShow(s=>({...s,admin:!s.admin}))} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#9ca3af",fontSize:11}}>{show["admin"]?"Hide":"Show"}</button>
               </div>
-              <button onClick={saveChange} style={{padding:"0 16px",borderRadius:8,background:RED,border:"none",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>Save</button>
+              <button onClick={saveChange} disabled={saving} style={{padding:"0 16px",borderRadius:8,background:RED,border:"none",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>{saving?"...":"Save"}</button>
               <button onClick={()=>{setEditing(null);setNewPwd("");}} style={{padding:"0 12px",borderRadius:8,background:"#f3f4f6",border:"none",color:"#6b7280",cursor:"pointer",fontSize:13}}>✕</button>
             </div>
           )}
         </div>
 
-        {/* Group staff by team */}
-        {Object.entries(effectiveTeam).map(([team,cfg])=>(
-          <div key={team} style={{marginBottom:16}}>
-            <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>{TEAM_LABEL[team]}</p>
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {[...cfg.l1.map(s=>({...s,level:"L1"})),...cfg.l2.map(s=>({...s,level:"L2"}))].map(staff=>(
-                <div key={staff.id} style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:12,padding:14,boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:10}}>
-                      <div style={{width:36,height:36,borderRadius:10,background:staff.level==="L2"?LIGHT:"#f0fdf4",display:"flex",alignItems:"center",justifyContent:"center"}}><User size={16} color={LEVEL_COLOR[staff.level]}/></div>
-                      <div>
-                        <div style={{display:"flex",alignItems:"center",gap:6}}>
-                          <p style={{color:"#1a1a2e",fontWeight:700,fontSize:13}}>{staff.name}</p>
-                          <span style={{background:staff.level==="L2"?LIGHT:"#f0fdf4",color:LEVEL_COLOR[staff.level],fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:4,border:`1px solid ${LEVEL_COLOR[staff.level]}30`}}>{staff.level}</span>
+        {/* Staff passwords from DB */}
+        {dynStaff===null?<Spinner/>:TEAM_LABELS.map(teamLabel=>{
+          const members=dynStaff.filter(s=>s.team===teamLabel);
+          if(!members.length)return null;
+          return(
+            <div key={teamLabel} style={{marginBottom:16}}>
+              <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>{teamLabel}</p>
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {members.map(staff=>(
+                  <div key={staff.emp_id} style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:12,padding:14,boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <div style={{width:36,height:36,borderRadius:10,background:staff.level==="L2"?LIGHT:"#f0fdf4",display:"flex",alignItems:"center",justifyContent:"center"}}><User size={16} color={LEVEL_COLOR[staff.level]}/></div>
+                        <div>
+                          <div style={{display:"flex",alignItems:"center",gap:6}}>
+                            <p style={{color:"#1a1a2e",fontWeight:700,fontSize:13}}>{staff.name}</p>
+                            <span style={{background:staff.level==="L2"?LIGHT:"#f0fdf4",color:LEVEL_COLOR[staff.level],fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:4,border:`1px solid ${LEVEL_COLOR[staff.level]}30`}}>{staff.level}</span>
+                          </div>
+                          <p style={{color:"#9ca3af",fontSize:11}}>ID: {staff.emp_id}</p>
                         </div>
-                        <p style={{color:"#9ca3af",fontSize:11}}>ID: {staff.id}</p>
                       </div>
+                      <button onClick={()=>{setEditing(staff.emp_id);setNewPwd("");}} style={{padding:"6px 12px",borderRadius:8,border:`1.5px solid ${LEVEL_COLOR[staff.level]}`,background:staff.level==="L2"?LIGHT:"#f0fdf4",color:LEVEL_COLOR[staff.level],fontSize:12,fontWeight:700,cursor:"pointer"}}>Change</button>
                     </div>
-                    <button onClick={()=>{setEditing(staff.id);setNewPwd("");}} style={{padding:"6px 12px",borderRadius:8,border:`1.5px solid ${LEVEL_COLOR[staff.level]}`,background:staff.level==="L2"?LIGHT:"#f0fdf4",color:LEVEL_COLOR[staff.level],fontSize:12,fontWeight:700,cursor:"pointer"}}>Change</button>
+                    {editing===staff.emp_id&&(
+                      <div style={{marginTop:10,display:"flex",gap:8}}>
+                        <div style={{flex:1,position:"relative"}}>
+                          <input style={{...INP,paddingRight:60}} type={show[staff.emp_id]?"text":"password"} placeholder="New password" value={newPwd} onChange={e=>setNewPwd(e.target.value)} onKeyDown={e=>e.key==="Enter"&&saveChange()}/>
+                          <button onClick={()=>setShow(s=>({...s,[staff.emp_id]:!s[staff.emp_id]}))} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#9ca3af",fontSize:11}}>{show[staff.emp_id]?"Hide":"Show"}</button>
+                        </div>
+                        <button onClick={saveChange} disabled={saving} style={{padding:"0 14px",borderRadius:8,background:RED,border:"none",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>{saving?"...":"Save"}</button>
+                        <button onClick={()=>{setEditing(null);setNewPwd("");}} style={{padding:"0 10px",borderRadius:8,background:"#f3f4f6",border:"none",color:"#6b7280",cursor:"pointer",fontSize:13}}>✕</button>
+                      </div>
+                    )}
                   </div>
-                  {editing===staff.id&&(
-                    <div style={{marginTop:10,display:"flex",gap:8}}>
-                      <div style={{flex:1,position:"relative"}}>
-                        <input style={{...INP,paddingRight:60}} type={show[staff.id]?"text":"password"} placeholder="New password" value={newPwd} onChange={e=>setNewPwd(e.target.value)} onKeyDown={e=>e.key==="Enter"&&saveChange()}/>
-                        <button onClick={()=>setShow(s=>({...s,[staff.id]:!s[staff.id]}))} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#9ca3af",fontSize:11}}>{show[staff.id]?"Hide":"Show"}</button>
-                      </div>
-                      <button onClick={saveChange} style={{padding:"0 14px",borderRadius:8,background:RED,border:"none",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>Save</button>
-                      <button onClick={()=>{setEditing(null);setNewPwd("");}} style={{padding:"0 10px",borderRadius:8,background:"#f3f4f6",border:"none",color:"#6b7280",cursor:"pointer",fontSize:13}}>✕</button>
-                    </div>
-                  )}
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
-        {/* L3/L4 */}
         <div style={{background:"#f9fafb",border:"1px dashed #e5e7eb",borderRadius:12,padding:14,marginTop:8}}>
           <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>Escalation Chain (View Only)</p>
-          {[["L3",TEAM_CONFIG.software.l3],["L4",TEAM_CONFIG.software.l4]].map(([lvl,name])=>(
+          {[["L3","Suraj Kumar"],["L4","Harshad Raut"]].map(([lvl,name])=>(
             <div key={lvl} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",borderBottom:"1px solid #f3f4f6"}}>
               <span style={{background:"#f3f4f6",color:"#374151",fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:4,minWidth:28,textAlign:"center"}}>{lvl}</span>
               <span style={{color:"#374151",fontSize:13,fontWeight:600}}>{name}</span>
@@ -2053,16 +1808,14 @@ function PasswordManager(){
       {pmTab==="team"&&(<>
         {teamSaved&&<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"10px 14px",marginBottom:16,color:"#16a34a",fontWeight:600,fontSize:13}}>✅ {teamSaved}</div>}
         {addErr&&<div style={{background:"#fff0f0",border:"1px solid #fca5a5",borderRadius:10,padding:"10px 14px",marginBottom:16,color:RED,fontWeight:600,fontSize:13}}>⚠️ {addErr}</div>}
-
-        {/* Add new L1 */}
-        <div style={{background:"#fff",border:`1.5px solid ${RED}30`,borderRadius:14,padding:16,marginBottom:20,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
-          <p style={{color:"#1a1a2e",fontWeight:700,fontSize:14,marginBottom:12}}>➕ Add New L1 Member</p>
+        <div style={{background:"#fff",border:`1.5px solid ${RED}30`,borderRadius:14,padding:16,marginBottom:20}}>
+          <p style={{color:"#1a1a2e",fontWeight:700,fontSize:14,marginBottom:12}}>➕ Add New Member</p>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <div>
               <p style={{color:"#6b7280",fontSize:11,fontWeight:600,marginBottom:4}}>TEAM</p>
               <div style={{display:"flex",gap:8}}>
-                {Object.entries(TEAM_LABEL).map(([k,v])=>(
-                  <button key={k} onClick={()=>setAddForm(f=>({...f,team:k}))} style={{flex:1,padding:"8px 4px",borderRadius:8,border:`2px solid ${addForm.team===k?RED:"#e5e7eb"}`,background:addForm.team===k?LIGHT:"#fff",color:addForm.team===k?RED:"#6b7280",fontSize:11,fontWeight:700,cursor:"pointer"}}>{v}</button>
+                {TEAM_LABELS.map(k=>(
+                  <button key={k} onClick={()=>setAddForm(f=>({...f,team:k}))} style={{flex:1,padding:"8px 4px",borderRadius:8,border:`2px solid ${addForm.team===k?RED:"#e5e7eb"}`,background:addForm.team===k?LIGHT:"#fff",color:addForm.team===k?RED:"#6b7280",fontSize:11,fontWeight:700,cursor:"pointer"}}>{k}</button>
                 ))}
               </div>
             </div>
@@ -2073,47 +1826,41 @@ function PasswordManager(){
               </div>
               <div>
                 <p style={{color:"#6b7280",fontSize:11,fontWeight:600,marginBottom:4}}>EMPLOYEE ID</p>
-                <input style={INP} placeholder="e.g. R002" value={addForm.id} onChange={e=>setAddForm(f=>({...f,id:e.target.value}))}/>
+                <input style={INP} placeholder="e.g. 12345" value={addForm.emp_id} onChange={e=>setAddForm(f=>({...f,emp_id:e.target.value}))}/>
               </div>
             </div>
             <div>
               <p style={{color:"#6b7280",fontSize:11,fontWeight:600,marginBottom:4}}>PASSWORD</p>
               <input style={INP} placeholder="Min 4 characters" value={addForm.password} onChange={e=>setAddForm(f=>({...f,password:e.target.value}))}/>
             </div>
-            <button onClick={addL1Member} style={{padding:"10px",borderRadius:10,background:RED,border:"none",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Add to {TEAM_LABEL[addForm.team]} Team</button>
+            <button onClick={addMember} style={{padding:"10px",borderRadius:10,background:RED,border:"none",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Add Member</button>
           </div>
         </div>
-
-        {/* Current L1 list — from DB */}
-        {dynStaff===null?<Spinner/>:Object.entries(TEAM_LABEL).map(([team,label])=>{
-          const members=dynStaff.filter(s=>s.team===team&&s.level==="L1");
-          const staticL1=TEAM_CONFIG[team].l1;
+        {dynStaff===null?<Spinner/>:TEAM_LABELS.map(teamLabel=>{
+          const members=dynStaff.filter(s=>s.team===teamLabel);
           return(
-            <div key={team} style={{marginBottom:16}}>
-              <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>{label} — L1</p>
+            <div key={teamLabel} style={{marginBottom:16}}>
+              <p style={{color:"#374151",fontSize:12,fontWeight:700,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>{teamLabel}</p>
               {members.length===0?(
-                <div style={{background:"#f9fafb",borderRadius:10,padding:"12px 16px",color:"#9ca3af",fontSize:13}}>
-                  Using default: {staticL1.map(s=>s.name).join(", ")}
-                </div>
+                <div style={{background:"#f9fafb",borderRadius:10,padding:"12px 16px",color:"#9ca3af",fontSize:13}}>No members added yet</div>
               ):members.map(s=>(
-                <div key={s.id} style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:12,padding:"12px 14px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
+                <div key={s.emp_id} style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:12,padding:"12px 14px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div style={{display:"flex",alignItems:"center",gap:10}}>
-                    <div style={{width:34,height:34,borderRadius:9,background:"#f0fdf4",display:"flex",alignItems:"center",justifyContent:"center"}}><User size={15} color="#16a34a"/></div>
+                    <div style={{width:34,height:34,borderRadius:9,background:s.level==="L2"?LIGHT:"#f0fdf4",display:"flex",alignItems:"center",justifyContent:"center"}}><User size={15} color={LEVEL_COLOR[s.level]}/></div>
                     <div>
-                      <p style={{color:"#1a1a2e",fontWeight:700,fontSize:13}}>{s.name}</p>
-                      <p style={{color:"#9ca3af",fontSize:11}}>ID: {s.id} · L1 · {label}</p>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <p style={{color:"#1a1a2e",fontWeight:700,fontSize:13}}>{s.name}</p>
+                        <span style={{background:s.level==="L2"?LIGHT:"#f0fdf4",color:LEVEL_COLOR[s.level],fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:4}}>{s.level}</span>
+                      </div>
+                      <p style={{color:"#9ca3af",fontSize:11}}>ID: {s.emp_id}</p>
                     </div>
                   </div>
-                  <button onClick={()=>deleteL1Member(s.id)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #fca5a5",background:"#fff0f0",color:RED,fontSize:12,fontWeight:700,cursor:"pointer"}}>Remove</button>
+                  <button onClick={()=>deleteMember(s.emp_id)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #fca5a5",background:"#fff0f0",color:RED,fontSize:12,fontWeight:700,cursor:"pointer"}}>Remove</button>
                 </div>
               ))}
             </div>
           );
         })}
-
-        <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"10px 14px",marginTop:8}}>
-          <p style={{color:"#92400e",fontSize:12,fontWeight:600}}>⚠️ Note: Adding members here overrides the default L1 list for that team. Removing all DB members reverts to defaults.</p>
-        </div>
       </>)}
     </div>
   );
@@ -2131,12 +1878,17 @@ function AdminApp({onLogout,notifProps}){
   const [filterStatus,setFilterStatus]=useState("all");
   const [filterAssignee,setFilterAssignee]=useState("all");
   const [search,setSearch]=useState("");
+  const [allStaff,setAllStaff]=useState([]);
 
   const load=useCallback(async()=>{
     setLoading(true);
     try{
-      const [t,s]=await Promise.all([sbGet("tickets","order=raised_at.desc"),sbGet("sla_config","order=id.asc")]);
-      setTickets(t);setSlaConfig(s);
+      const [t,s,staff]=await Promise.all([
+        sbGet("tickets","order=raised_at.desc"),
+        sbGet("sla_config","order=id.asc"),
+        getAllStaffFromDB(),
+      ]);
+      setTickets(t);setSlaConfig(s);setAllStaff(staff);
     }catch(e){setErr("Failed to load data.");}
     setLoading(false);
   },[]);
@@ -2146,7 +1898,7 @@ function AdminApp({onLogout,notifProps}){
 
   const total=tickets.length;
   const open=tickets.filter(t=>t.status==="Open").length;
-  const resolved=tickets.filter(t=>t.status==="Resolved"||false).length;
+  const resolved=tickets.filter(t=>t.status==="Resolved").length;
   const breached=tickets.filter(t=>isSlaBreached(t)).length;
 
   const filtered=tickets.filter(t=>
@@ -2158,7 +1910,6 @@ function AdminApp({onLogout,notifProps}){
 
   const NAV=[["dashboard",LayoutDashboard,"Dashboard"],["tickets",FileText,"Tickets"],["reports",BarChart2,"Reports"],["sla",Settings,"OLA"],["passwords",User,"Passwords"]];
 
-  // Sidebar for desktop
   const Sidebar=()=>(
     <div className="sidebar" style={{display:"none",background:"#fff",borderRight:"1px solid #e5e7eb",flexDirection:"column",height:"100vh",position:"sticky",top:0}}>
       <div style={{padding:"16px 20px",borderBottom:"1px solid #e5e7eb"}}>
@@ -2199,7 +1950,6 @@ function AdminApp({onLogout,notifProps}){
     <div className="page-shell" style={{minHeight:"100vh",background:"#f5f6fa",display:"flex",flexDirection:"column",width:"100%"}}>
       <Sidebar/>
       <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0}}>
-        {/* Top bar */}
         <div className="main-topbar" style={{position:"fixed",top:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,zIndex:10}}>
           <div style={{height:4,background:`linear-gradient(90deg,${RED},${DARK})`}}/>
           <div style={{background:"#fff",borderBottom:"1px solid #e5e7eb",padding:"12px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
@@ -2215,7 +1965,6 @@ function AdminApp({onLogout,notifProps}){
             </div>
           </div>
         </div>
-
         <div style={{flex:1,overflowY:"auto",paddingTop:84,paddingBottom:70}}>
           {loading?<Spinner/>:err?<div style={{padding:20}}><ErrBox msg={err}/></div>:(
             <div style={{maxWidth:960,margin:"0 auto"}}>
@@ -2229,7 +1978,6 @@ function AdminApp({onLogout,notifProps}){
                       </div>
                     ))}
                   </div>
-                  {/* Category summary */}
                   <div className="fu2" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:20}}>
                     {Object.entries(MAIN_CATEGORIES).map(([key,cat])=>{
                       const count=tickets.filter(t=>t.software===key).length;
@@ -2242,7 +1990,6 @@ function AdminApp({onLogout,notifProps}){
                       );
                     })}
                   </div>
-                  {/* OLA breached */}
                   {breached>0&&(
                     <div className="fu3" style={{background:"#fff5f5",border:"1.5px solid #fca5a5",borderRadius:14,padding:16,marginBottom:20}}>
                       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
@@ -2260,7 +2007,6 @@ function AdminApp({onLogout,notifProps}){
                       ))}
                     </div>
                   )}
-                  {/* Recent */}
                   <div className="fu3" style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
                     <p style={{color:"#1a1a2e",fontWeight:700,fontSize:14,marginBottom:14}}>Recent Tickets</p>
                     {tickets.slice(0,5).map(t=>(
@@ -2275,7 +2021,6 @@ function AdminApp({onLogout,notifProps}){
                   </div>
                 </div>
               )}
-
               {tab==="tickets"&&(
                 <div style={{padding:20}}>
                   <h2 className="fu" style={{color:"#1a1a2e",fontSize:20,fontWeight:800,marginBottom:16}}>All Tickets</h2>
@@ -2294,7 +2039,7 @@ function AdminApp({onLogout,notifProps}){
                     </select>
                     <select style={{...SEL,padding:"8px 10px",fontSize:12,width:"auto"}} value={filterAssignee} onChange={e=>setFilterAssignee(e.target.value)}>
                       <option value="all">All Assignees</option>
-                      {getAllStaff().map(s=><option key={s.id} value={s.name}>{s.name} ({s.level})</option>)}
+                      {allStaff.map(s=><option key={s.emp_id} value={s.name}>{s.name} ({s.level})</option>)}
                     </select>
                   </div>
                   <p className="fu2" style={{color:"#9ca3af",fontSize:12,marginBottom:12}}>{filtered.length} ticket{filtered.length!==1?"s":""}</p>
@@ -2324,15 +2069,12 @@ function AdminApp({onLogout,notifProps}){
                   </div>
                 </div>
               )}
-
               {tab==="reports"&&<Reports tickets={tickets}/>}
               {tab==="sla"&&<SlaSettings slaConfig={slaConfig} onUpdate={setSlaConfig}/>}
               {tab==="passwords"&&<PasswordManager/>}
             </div>
           )}
         </div>
-
-        {/* Bottom nav (mobile) */}
         <div className="bottom-nav" style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:"#fff",borderTop:"1px solid #e5e7eb",display:"flex",boxShadow:"0 -2px 8px rgba(0,0,0,0.06)"}}>
           {NAV.map(([id,Icon,label])=>(
             <button key={id} onClick={()=>setTab(id)} style={{flex:1,padding:"10px 0 6px",background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
