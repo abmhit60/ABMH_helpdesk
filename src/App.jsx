@@ -2076,6 +2076,35 @@ function AdminApp({onLogout,notifProps}){
                         </div>
                       );
                     })}
+                    {/* Unassigned tickets row */}
+                    {(()=>{
+                      const unassignedT=tickets.filter(t=>!t.assigned_to||t.assigned_to==="");
+                      const unassignedOpen=unassignedT.filter(t=>t.status==="Open"||t.status==="In Progress").length;
+                      const unassignedBreached=unassignedT.filter(t=>isSlaBreached(t)).length;
+                      if(unassignedT.length===0)return null;
+                      return(
+                        <div style={{marginBottom:14,paddingBottom:14,borderBottom:"1px solid #f9fafb"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+                            <div style={{width:34,height:34,borderRadius:10,background:"#fef9c3",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><AlertTriangle size={14} color="#a16207"/></div>
+                            <div style={{flex:1}}>
+                              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                <p style={{color:"#1a1a2e",fontWeight:700,fontSize:13}}>Unassigned</p>
+                                <span style={{background:"#fef9c3",color:"#a16207",fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:4,border:"1px solid #fde047"}}>⚡ Needs Attention</span>
+                              </div>
+                            </div>
+                            <span style={{color:unassignedBreached>0?RED:"#a16207",fontWeight:800,fontSize:13}}>{unassignedBreached>0?"🚨 Breached":"⏳ Pending"}</span>
+                          </div>
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6}}>
+                            {[["Total",unassignedT.length,"#374151","#f9fafb"],["Open",unassignedOpen,"#d97706","#fffbeb"],["Resolved",0,"#16a34a","#f0fdf4"],["Breached",unassignedBreached,RED,LIGHT]].map(([l,v,c,bg])=>(
+                              <div key={l} style={{background:bg,borderRadius:8,padding:"8px 6px",textAlign:"center",border:`1px solid ${c}15`}}>
+                                <p style={{color:c,fontWeight:800,fontSize:16,lineHeight:1}}>{v}</p>
+                                <p style={{color:"#9ca3af",fontSize:10,marginTop:2}}>{l}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div className="fu3" style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
                     <p style={{color:"#1a1a2e",fontWeight:700,fontSize:14,marginBottom:14}}>Recent Tickets</p>
